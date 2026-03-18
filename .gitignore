@@ -1,0 +1,41 @@
+.venv/
+venv/
+
+.cursor/
+
+.ipynb_checkpoints/
+
+__pycache__/
+*.pyc
+*.pyo
+
+.DS_Store
+
+# Logs / local tooling
+*.log
+.env
+.env.*
+
+# Data outputs / artifacts
+data/interim/
+data/processed/
+outputs/
+
+# Raw datasets can be large; keep them out of git
+data/raw/*.csv
+data/raw/**/*.csv
+
+# ML / model artifacts
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.hdf5
+
+# Python packaging build outputs
+build/
+dist/
+*.egg-info/
+

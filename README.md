@@ -1,0 +1,82 @@
+# Ops Decision Engine
+
+An end-to-end workspace for turning operational data into **actionable decisions** (triage, prioritization, routing, forecasting, and capacity planning).
+
+## Dataset
+
+This project uses the Kaggle dataset:
+
+- [Customer Support Tickets Dataset (200k records)](https://www.kaggle.com/datasets/mirzayasirabdullah07/customer-support-tickets-dataset-200k-records/data)
+
+### Expected file location
+
+Place the CSV here:
+
+- `data/raw/customer_support_tickets_200k.csv`
+
+The notebooks assume this relative path.
+
+## Project Layout
+
+```text
+Ops Decision Engine/
+├── data/
+│   ├── raw/          # immutable source data dumps
+│   ├── interim/      # cleaned/validated datasets
+│   └── processed/    # feature-ready datasets for modeling/reporting
+├── notebooks/        # exploration, EDA, one-off analysis
+├── scripts/          # reusable pipelines (planned: ingest/clean/featurize/train/eval)
+├── outputs/          # figures, tables, model artifacts, exports (planned)
+├── README.md
+└── requirements.txt
+```
+
+## Quickstart (Windows, PowerShell)
+
+### 1) Create and activate a virtual environment
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 2) Run notebooks
+
+```powershell
+jupyter lab
+```
+
+If Jupyter can’t find packages you installed (e.g. `pandas`), install/select the `.venv` kernel:
+
+```powershell
+python -m ipykernel install --user --name ops-decision-engine --display-name "Python (.venv) - ops-decision-engine"
+```
+
+Then in Jupyter: **Kernel → Change Kernel** → **Python (.venv) - ops-decision-engine**.
+
+## Data Workflow (Recommended)
+
+Use a strict flow to keep outputs reproducible:
+
+- **Raw → interim → processed**
+- Put original files in `data/raw/` and do not edit them in place.
+- Write deterministic cleaning steps that output to `data/interim/`.
+- Write feature engineering / final dataset creation to `data/processed/`.
+
+## Notebook Conventions (Windows)
+
+- Run notebooks from the repo root (the folder that contains `data/`) to keep relative paths predictable.
+- Prefer `pathlib` for filesystem paths.
+- When writing outputs, ensure destination directories exist (e.g. `data/interim/`, `data/processed/`).
+
+## Included Notebook
+
+- `notebooks/01_data_inspection.ipynb` (dataset load, sampling, and initial cleaning)
+
+## Next Steps (Suggested)
+
+- Add reusable pipeline entrypoints in `scripts/` (clean → featurize → train/eval).
+- Expand datasets/exports under `outputs/` by run date if artifacts accumulate.
+- Grow notebook coverage into a staged workflow: baseline → modeling → evaluation → iteration.
