@@ -81,16 +81,14 @@ Use a strict flow to keep outputs reproducible:
 
 - `notebooks/01_data_inspection.ipynb` (dataset load, sampling, and initial cleaning)
 
-## Training Stages Results (Priority Classifier)
+## Training Stages Results (Priority Classification)
 
-Key metrics are taken from `outputs/ml/**/metrics.json` on a stratified `priority` test split.
+Each training stage runs a model and writes evaluation artifacts (metrics, classification reports, confusion matrix, and prediction CSVs) under `outputs/ml/<stage>/`.
 
-| Stage | Training script | Model artifact | Accuracy | Macro F1 | Weighted F1 |
-|---|---|---|---:|---:|---:|
-| `baseline` | `src/ml/train_baseline.py` | `artifacts/ml/priority_baseline_pipeline.joblib` | 0.5471 | 0.5029 | 0.5336 |
-| `stage2` | `src/ml/train_stage2.py` | `artifacts/ml/priority_stage2_pipeline.joblib` | 0.6196 | 0.6122 | 0.6211 |
-| `stage3` | `src/ml/train_stage3.py` | `artifacts/ml/priority_stage3_pipeline.joblib` | 0.6368 | 0.6301 | 0.6379 |
-| `stage4` | `src/ml/train_stage4.py` | `artifacts/ml/priority_stage4_pipeline.joblib` | 0.6334 | 0.6271 | 0.6342 |
-| `stage5_svm` | `src/ml/train_stage5_svm.py` | `artifacts/ml/priority_stage5_svm_pipeline.joblib` | 0.7111 | 0.7018 | 0.7110 |
-
-Best observed test performance so far: `stage5_svm` (LinearSVC).
+| Stage | Training script | Outputs folder | Approach (high level) | Accuracy | Macro F1 | Weighted F1 |
+|---|---|---|---|---:|---:|---:|
+| `baseline` | `src/ml/train_baseline.py` | `outputs/ml/baseline/` | TF-IDF (text-only) + Logistic Regression | 0.5471 | 0.5029 | 0.5336 |
+| `stage2` | `src/ml/train_stage2.py` | `outputs/ml/stage2/` | TF-IDF (text-only, 1-2 grams) + Logistic Regression | 0.6196 | 0.6122 | 0.6211 |
+| `stage3` | `src/ml/train_stage3.py` | `outputs/ml/stage3/` | TF-IDF (text) + OneHot(type, queue) + Logistic Regression | 0.6368 | 0.6301 | 0.6379 |
+| `stage4` | `src/ml/train_stage4.py` | `outputs/ml/stage4/` | TF-IDF + OneHot(type, queue) + scaled engineered keyword features + Logistic Regression | 0.6334 | 0.6271 | 0.6342 |
+| `stage5_svm` | `src/ml/train_stage5_svm.py` | `outputs/ml/stage5_svm/` | TF-IDF + OneHot(type, queue) + LinearSVC | 0.7111 | 0.7018 | 0.7110 |
