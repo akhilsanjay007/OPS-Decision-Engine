@@ -81,8 +81,16 @@ Use a strict flow to keep outputs reproducible:
 
 - `notebooks/01_data_inspection.ipynb` (dataset load, sampling, and initial cleaning)
 
-## Next Steps (Suggested)
+## Training Stages Results (Priority Classifier)
 
-- Add reusable pipeline entrypoints in `scripts/` (clean → featurize → train/eval).
-- Expand datasets/exports under `outputs/` by run date if artifacts accumulate.
-- Grow notebook coverage into a staged workflow: baseline → modeling → evaluation → iteration.
+Key metrics are taken from `outputs/ml/**/metrics.json` on a stratified `priority` test split.
+
+| Stage | Training script | Model artifact | Accuracy | Macro F1 | Weighted F1 |
+|---|---|---|---:|---:|---:|
+| `baseline` | `src/ml/train_baseline.py` | `artifacts/ml/priority_baseline_pipeline.joblib` | 0.5471 | 0.5029 | 0.5336 |
+| `stage2` | `src/ml/train_stage2.py` | `artifacts/ml/priority_stage2_pipeline.joblib` | 0.6196 | 0.6122 | 0.6211 |
+| `stage3` | `src/ml/train_stage3.py` | `artifacts/ml/priority_stage3_pipeline.joblib` | 0.6368 | 0.6301 | 0.6379 |
+| `stage4` | `src/ml/train_stage4.py` | `artifacts/ml/priority_stage4_pipeline.joblib` | 0.6334 | 0.6271 | 0.6342 |
+| `stage5_svm` | `src/ml/train_stage5_svm.py` | `artifacts/ml/priority_stage5_svm_pipeline.joblib` | 0.7111 | 0.7018 | 0.7110 |
+
+Best observed test performance so far: `stage5_svm` (LinearSVC).
