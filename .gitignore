@@ -20,6 +20,9 @@ __pycache__/
 data/interim/
 data/processed/
 outputs/
+artifacts/
+!artifacts/ml/
+!artifacts/ml/.gitkeep
 
 # Raw datasets can be large; keep them out of git
 data/raw/*.csv
