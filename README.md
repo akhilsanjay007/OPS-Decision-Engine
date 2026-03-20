@@ -6,15 +6,17 @@ An end-to-end workspace for turning operational data into **actionable decisions
 
 This project uses the Kaggle dataset:
 
-- [Customer Support Tickets Dataset (200k records)](https://www.kaggle.com/datasets/mirzayasirabdullah07/customer-support-tickets-dataset-200k-records/data)
+- [Multilingual Customer Support Tickets](https://www.kaggle.com/datasets/tobiasbueck/multilingual-customer-support-tickets)
 
 ### Expected file location
 
-Place the CSV here:
+The notebooks expect the source CSV under `data/raw/`.
 
-- `data/raw/customer_support_tickets_200k.csv`
+If you're using the Kaggle multilingual dataset, the CSV file is commonly named:
 
-The notebooks assume this relative path.
+- `data/raw/aa_dataset-tickets-multi-lang-5-2-50-version.csv`
+
+If you keep a different filename, update the notebook path accordingly.
 
 ## Project Layout
 
