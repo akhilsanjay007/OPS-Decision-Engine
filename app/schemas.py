@@ -44,3 +44,11 @@ class PredictResponse(BaseModel):
     evidence: List[EvidenceIncident]
     assessment_summary: str
     raw_decision: str
+
+
+class PredictDebugResponse(PredictResponse):
+    raw_retrieved_incidents: List[EvidenceIncident]
+    reranked_incidents: List[EvidenceIncident]
+    deduplicated_incidents: List[EvidenceIncident]
+    evidence_summary: str
+    prompt: str

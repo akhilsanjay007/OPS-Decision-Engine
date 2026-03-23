@@ -56,10 +56,18 @@ def retrieve_similar_incidents(
     top_k: int = 5,
     queue_filter: str | None = None,
     type_filter: str | None = None,
+    embedder=None,
+    collection=None,
 ) -> List[Dict[str, Any]]:
+    if embedder is None:
+        embedder = load_embedder(model_name)
+    else:
+        print("[INFO] Reusing cached embedding model")
 
-    embedder = load_embedder(model_name)
-    collection = load_collection(chroma_path, collection_name)
+    if collection is None:
+        collection = load_collection(chroma_path, collection_name)
+    else:
+        print("[INFO] Reusing cached Chroma collection")
 
     print("[INFO] Encoding query...")
     query_embedding = embedder.encode(query).tolist()

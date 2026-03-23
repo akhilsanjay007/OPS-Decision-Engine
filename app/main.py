@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import traceback
 
-from app.schemas import PredictRequest, PredictResponse
+from app.schemas import PredictRequest, PredictResponse, PredictDebugResponse
 from app.service import service
 
 app = FastAPI(
@@ -18,6 +18,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    service.startup()
 
 
 @app.get("/")
@@ -43,5 +48,19 @@ def predict(payload: PredictRequest):
         )
     except Exception as e:
         print(f"[ERROR] /predict failed: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/predict/debug", response_model=PredictDebugResponse)
+def predict_debug(payload: PredictRequest):
+    try:
+        return service.predict_debug(
+            issue=payload.issue,
+            ticket_type=payload.type,
+            queue=payload.queue,
+        )
+    except Exception as e:
+        print(f"[ERROR] /predict/debug failed: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

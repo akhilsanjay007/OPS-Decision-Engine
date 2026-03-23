@@ -14,6 +14,7 @@ OPENAI_MODEL = "gpt-4o-mini"
 QUEUE_BOOST = 0.15
 TYPE_BOOST = 0.05
 PRIORITY_BOOST = 0.03
+STRONG_HIGH_DISTANCE_THRESHOLD = 0.65
 
 client: OpenAI | None = None
 
@@ -157,6 +158,27 @@ def normalize_tags(raw_tags: Any) -> List[str]:
     return []
 
 
+def serialize_incident(inc: Dict[str, Any]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "doc_id": inc.get("doc_id"),
+        "type": inc.get("type"),
+        "queue": inc.get("queue"),
+        "priority": inc.get("priority"),
+        "distance": float(inc.get("distance", 0.0)),
+        "adjusted_score": float(inc.get("adjusted_score", inc.get("distance", 0.0))),
+        "tags": normalize_tags(inc.get("tags", [])),
+        "issue_description": inc.get("issue_description"),
+        "resolution": inc.get("resolution"),
+    }
+
+    if "rank" in inc:
+        payload["rank"] = inc.get("rank")
+    if "retrieval_text" in inc:
+        payload["retrieval_text"] = inc.get("retrieval_text")
+
+    return payload
+
+
 def summarize_retrieval_evidence(
     incidents: List[Dict[str, Any]],
     predicted_priority: str,
@@ -246,6 +268,17 @@ def recommend_priority(ml_priority: str, incidents: List[Dict[str, Any]]) -> str
     retrieved_priorities = [str(inc.get("priority", "UNKNOWN")) for inc in incidents]
     priority_counts = Counter(retrieved_priorities)
     majority_priority, majority_count = priority_counts.most_common(1)[0]
+
+    # Guardrail: avoid overly aggressive downgrade from HIGH to LOW when
+    # there is still a reasonably strong HIGH-similarity incident in evidence.
+    if ml_priority == "HIGH" and majority_priority == "LOW":
+        has_strong_high = any(
+            str(inc.get("priority", "UNKNOWN")) == "HIGH"
+            and float(inc.get("distance", 1.0)) <= STRONG_HIGH_DISTANCE_THRESHOLD
+            for inc in incidents
+        )
+        if has_strong_high:
+            return "MEDIUM"
 
     if majority_count >= 2 and majority_priority != "UNKNOWN":
         return majority_priority
@@ -455,6 +488,7 @@ def run_full_pipeline_structured(
     ticket_type: str,
     queue: str,
     top_k: int = 3,
+    include_debug: bool = False,
 ) -> Dict[str, Any]:
     print("[DEBUG] run_full_pipeline_structured started")
     retrieval_top_k = max(top_k * 3, 8)
@@ -541,24 +575,11 @@ def run_full_pipeline_structured(
         f"evidence_bullets={len(parsed.get('evidence_from_similar_incidents', []))}"
     )
 
-    evidence = []
-    for inc in incidents:
-        normalized_tags = normalize_tags(inc.get("tags", []))
-        evidence.append({
-            "doc_id": inc.get("doc_id"),
-            "type": inc.get("type"),
-            "queue": inc.get("queue"),
-            "priority": inc.get("priority"),
-            "distance": float(inc.get("distance", 0.0)),
-            "adjusted_score": float(inc.get("adjusted_score", inc.get("distance", 0.0))),
-            "tags": normalized_tags,
-            "issue_description": inc.get("issue_description"),
-            "resolution": inc.get("resolution"),
-        })
+    evidence = [serialize_incident(inc) for inc in incidents]
     print(f"[DEBUG] after final evidence construction: evidence_items={len(evidence)}")
 
     print("[DEBUG] before final return")
-    return {
+    response = {
         "input_issue": issue_description,
         "input_type": ticket_type,
         "input_queue": queue,
@@ -576,3 +597,27 @@ def run_full_pipeline_structured(
         "assessment_summary": parsed["assessment_summary"],
         "raw_decision": parsed["raw_decision"],
     }
+
+    if include_debug:
+        response["raw_retrieved_incidents"] = [serialize_incident(inc) for inc in raw_incidents]
+        response["reranked_incidents"] = [serialize_incident(inc) for inc in reranked_incidents]
+        response["deduplicated_incidents"] = [serialize_incident(inc) for inc in incidents]
+        response["evidence_summary"] = evidence_summary
+        response["prompt"] = prompt
+
+    return response
+
+
+def run_full_pipeline_structured_debug(
+    issue_description: str,
+    ticket_type: str,
+    queue: str,
+    top_k: int = 3,
+) -> Dict[str, Any]:
+    return run_full_pipeline_structured(
+        issue_description=issue_description,
+        ticket_type=ticket_type,
+        queue=queue,
+        top_k=top_k,
+        include_debug=True,
+    )

@@ -8,6 +8,7 @@ from typing import Dict, Any, List
 import pandas as pd
 
 from src.rag.retrieve import retrieve_similar_incidents
+from src.rag.retrieve import load_embedder, load_collection
 
 
 # ---------------- CONFIG ---------------- #
@@ -19,11 +20,36 @@ COLLECTION_NAME = "incident_memory"
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
+# ---------------- RESOURCE CACHE ---------------- #
+
+_CACHED_ML_MODEL = None
+_CACHED_EMBEDDER = None
+_CACHED_COLLECTION = None
+
+
 # ---------------- LOAD ML MODEL ---------------- #
 
 def load_ml_model():
     print(f"[INFO] Loading ML model from: {ML_MODEL_PATH}")
     return joblib.load(ML_MODEL_PATH)
+
+
+def initialize_resources() -> None:
+    global _CACHED_ML_MODEL, _CACHED_EMBEDDER, _CACHED_COLLECTION
+
+    if _CACHED_ML_MODEL is None:
+        _CACHED_ML_MODEL = load_ml_model()
+
+    if _CACHED_EMBEDDER is None:
+        _CACHED_EMBEDDER = load_embedder(EMBED_MODEL)
+
+    if _CACHED_COLLECTION is None:
+        _CACHED_COLLECTION = load_collection(CHROMA_PATH, COLLECTION_NAME)
+
+
+def get_cached_resources():
+    initialize_resources()
+    return _CACHED_ML_MODEL, _CACHED_EMBEDDER, _CACHED_COLLECTION
 
 
 # ---------------- PREDICT PRIORITY ---------------- #
@@ -127,8 +153,8 @@ def run_pipeline(
     print("OPS DECISION ENGINE - PREDICT + RETRIEVE")
     print("=" * 120)
 
-    # 1) Load ML model
-    model = load_ml_model()
+    # 1) Get cached heavy resources
+    model, embedder, collection = get_cached_resources()
 
     # 2) Predict priority
     predicted_priority = predict_priority(
@@ -153,6 +179,8 @@ def run_pipeline(
         top_k=top_k,
         queue_filter=None,
         type_filter=None,
+        embedder=embedder,
+        collection=collection,
     )
 
     return {
