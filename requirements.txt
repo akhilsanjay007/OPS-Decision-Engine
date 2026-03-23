@@ -3,3 +3,5 @@ jupyterlab
 ipykernel
 joblib
 scikit-learn
+chromadb
+sentence-transformers
