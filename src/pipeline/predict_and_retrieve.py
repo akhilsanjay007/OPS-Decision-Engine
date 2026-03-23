@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import joblib
+import re
+from typing import Dict, Any, List
+
 import pandas as pd
-from typing import Dict, Any
 
 from src.rag.retrieve import retrieve_similar_incidents
 
@@ -32,11 +34,6 @@ def predict_priority(
     ticket_type: str,
     queue: str,
 ) -> str:
-    """
-    Predict priority using trained sklearn pipeline.
-    MUST match training format (DataFrame with same columns).
-    """
-
     input_df = pd.DataFrame([{
         "issue_description": issue_description,
         "type": ticket_type,
@@ -44,21 +41,77 @@ def predict_priority(
     }])
 
     prediction = model.predict(input_df)[0]
-
     return prediction
 
 
-# ---------------- BUILD QUERY ---------------- #
+# ---------------- QUERY ENRICHMENT ---------------- #
+
+def normalize_issue_text(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def extract_issue_signals(issue_description: str) -> List[str]:
+    """
+    Lightweight rule-based signal extraction for better retrieval.
+    Simple, production-minded, no heavy NLP.
+    """
+    text = normalize_issue_text(issue_description)
+    signals: List[str] = []
+
+    # Authentication / login / lockout
+    if any(term in text for term in ["login", "log in", "password", "auth", "authentication", "signin", "sign in"]):
+        signals.extend(["login issue", "authentication issue"])
+
+    if any(term in text for term in ["locked", "lockout", "failed login", "failed attempts"]):
+        signals.extend(["account lockout", "failed login attempts", "authentication policy"])
+
+    # Payment / billing
+    if any(term in text for term in ["payment", "billing", "transaction", "gateway", "subscription"]):
+        signals.extend(["payment processing", "billing issue", "payment gateway"])
+
+    # Timeout / latency / performance
+    if any(term in text for term in ["timeout", "timed out", "latency", "slow", "delay", "response time"]):
+        signals.extend(["performance issue", "timeout", "response delay"])
+
+    if "api" in text:
+        signals.extend(["api issue", "api performance"])
+
+    # Database
+    if any(term in text for term in ["database", "db", "sql", "query", "connection pool"]):
+        signals.extend(["database issue", "database load", "connection issue"])
+
+    # Deployment / release / config
+    if any(term in text for term in ["deployment", "deploy", "release", "update", "code change", "recent change"]):
+        signals.extend(["deployment regression", "recent change impact", "configuration change"])
+
+    # Crash / outage
+    if any(term in text for term in ["crash", "down", "outage", "unavailable", "service interruption"]):
+        signals.extend(["service outage", "application failure"])
+
+    # Remove duplicates, preserve order
+    deduped = []
+    seen = set()
+    for s in signals:
+        if s not in seen:
+            deduped.append(s)
+            seen.add(s)
+
+    return deduped
+
 
 def build_query(issue_description: str, ticket_type: str, queue: str) -> str:
     """
-    Build richer query for retrieval (adds structured context).
+    Build richer retrieval query using structured fields + extracted issue signals.
     """
-    return f"""
-Issue: {issue_description}
+    signals = extract_issue_signals(issue_description)
+    signal_text = ", ".join(signals) if signals else "none"
+
+    return f"""Issue: {issue_description}
 Type: {ticket_type}
 Queue: {queue}
-"""
+Signals: {signal_text}"""
 
 
 # ---------------- MAIN PIPELINE ---------------- #
@@ -74,10 +127,10 @@ def run_pipeline(
     print("OPS DECISION ENGINE - PREDICT + RETRIEVE")
     print("=" * 120)
 
-    # 1️⃣ Load ML model
+    # 1) Load ML model
     model = load_ml_model()
 
-    # 2️⃣ Predict priority
+    # 2) Predict priority
     predicted_priority = predict_priority(
         model,
         issue_description,
@@ -87,27 +140,28 @@ def run_pipeline(
 
     print(f"\n[RESULT] Predicted Priority: {predicted_priority}")
 
-    # 3️⃣ Build query
+    # 3) Build enriched retrieval query
     query = build_query(issue_description, ticket_type, queue)
+    print(f"[INFO] Retrieval Query:\n{query}\n")
 
-    # 4️⃣ Retrieve incidents
+    # 4) Retrieve incidents
     retrieved = retrieve_similar_incidents(
         query=query,
         chroma_path=CHROMA_PATH,
         collection_name=COLLECTION_NAME,
         model_name=EMBED_MODEL,
         top_k=top_k,
-        queue_filter=None,   # can enable later
+        queue_filter=None,
         type_filter=None,
     )
 
-    # 5️⃣ Return structured result (for future LLM)
     return {
         "issue_description": issue_description,
         "type": ticket_type,
         "queue": queue,
         "predicted_priority": predicted_priority,
         "retrieved_incidents": retrieved,
+        "retrieval_query": query,
     }
 
 

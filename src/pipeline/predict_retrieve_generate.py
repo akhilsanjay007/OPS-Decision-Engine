@@ -17,8 +17,8 @@ from src.pipeline.predict_and_retrieve import run_pipeline
 OPENAI_MODEL = "gpt-4o-mini"
 
 # Reranking weights
-QUEUE_BOOST = 0.08
-TYPE_BOOST = 0.04
+QUEUE_BOOST = 0.15
+TYPE_BOOST = 0.05
 PRIORITY_BOOST = 0.03
 
 
@@ -53,20 +53,40 @@ def deduplicate_incidents(
     incidents: List[Dict[str, Any]],
     max_results: int = 3,
     threshold: float = 0.88,
+    preferred_queue: str | None = None,
+    min_same_queue: int = 2,
 ) -> List[Dict[str, Any]]:
+    """
+    Remove near-duplicate incidents while preserving ranking order.
+    Prefer keeping at least `min_same_queue` incidents from the preferred queue when available.
+    """
     deduped: List[Dict[str, Any]] = []
 
-    for incident in incidents:
-        current_text = incident.get("issue_description", "")
-
-        duplicate_found = False
-        for kept in deduped:
+    def is_duplicate(candidate: Dict[str, Any], kept_list: List[Dict[str, Any]]) -> bool:
+        current_text = candidate.get("issue_description", "")
+        for kept in kept_list:
             kept_text = kept.get("issue_description", "")
             if is_near_duplicate(current_text, kept_text, threshold=threshold):
-                duplicate_found = True
+                return True
+        return False
+
+    # Pass 1: prefer same-queue incidents first
+    if preferred_queue:
+        same_queue_candidates = [
+            inc for inc in incidents
+            if str(inc.get("queue", "")) == preferred_queue
+        ]
+
+        for incident in same_queue_candidates:
+            if not is_duplicate(incident, deduped):
+                deduped.append(incident)
+
+            if len(deduped) >= min(max_results, min_same_queue):
                 break
 
-        if not duplicate_found:
+    # Pass 2: fill remaining slots from all reranked incidents
+    for incident in incidents:
+        if not is_duplicate(incident, deduped):
             deduped.append(incident)
 
         if len(deduped) >= max_results:
@@ -375,6 +395,8 @@ def run_full_pipeline(
         reranked_incidents,
         max_results=top_k,
         threshold=0.88,
+        preferred_queue=queue,
+        min_same_queue=2,
     )
 
     if verbose:

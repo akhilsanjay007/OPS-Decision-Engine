@@ -87,6 +87,18 @@ Predicted priority + similar incidents (requires the Stage 5 SVM joblib and Chro
 python -m tests.test_predict_and_retrieve
 ```
 
+Full pipeline (predict + retrieve + generate decision):
+
+```powershell
+python -m tests.test_predict_retrieve_generate
+```
+
+Evaluation run (writes a CSV summary to `artifacts/evaluation/pipeline_evaluation_results.csv`):
+
+```powershell
+python -m tests.evaluate_pipeline
+```
+
 ## Data Workflow (Recommended)
 
 Use a strict flow to keep outputs reproducible:
@@ -145,7 +157,7 @@ Two modules combine the **priority model** (Stage 5 SVM sklearn pipeline) with *
 
 ### Predict priority + retrieve similar incidents
 
-`src.pipeline.predict_and_retrieve.run_pipeline(...)` loads the joblib model, predicts priority from `issue_description`, `type`, and `queue`, builds a retrieval query, and returns `predicted_priority` plus `retrieved_incidents`.
+`src.pipeline.predict_and_retrieve.run_pipeline(...)` loads the joblib model, predicts priority from `issue_description`, `type`, and `queue`, enriches the retrieval query with lightweight signal extraction, and returns `predicted_priority`, `retrieved_incidents`, and `retrieval_query`.
 
 CLI (from repo root):
 
@@ -157,7 +169,7 @@ Programmatic use and sample cases: `tests/test_predict_and_retrieve.py`.
 
 ### Full pipeline: predict + retrieve + LLM decision
 
-`src.pipeline.predict_retrieve_generate.run_full_pipeline(...)` runs the same predict-and-retrieve step, formats retrieved incidents, calls the OpenAI Chat Completions API (`gpt-4o-mini` by default in code), and prints a structured answer (root cause, action plan, escalation).
+`src.pipeline.predict_retrieve_generate.run_full_pipeline(...)` runs predict-and-retrieve, reranks incidents (queue/type/priority boosts), removes near-duplicates, computes a confidence score/level, and then calls the OpenAI Chat Completions API (`gpt-4o-mini` by default in code) to produce a structured operations decision.
 
 **Setup:** set your API key in the environment before running:
 
@@ -170,6 +182,28 @@ CLI:
 ```powershell
 python -m src.pipeline.predict_retrieve_generate --issue "Your text" --type "INCIDENT" --queue "CUSTOMER SERVICE" --top_k 3
 ```
+
+Programmatic smoke tests: `tests/test_predict_retrieve_generate.py`.
+
+### Pipeline evaluation
+
+`tests/evaluate_pipeline.py` runs a fixed set of cases end-to-end and records:
+
+- ML priority prediction
+- rule-based recommended priority from retrieved evidence
+- LLM priority extracted from generated output
+- confidence score/level
+- escalation recommendation and same-queue evidence ratio
+
+Run:
+
+```powershell
+python -m tests.evaluate_pipeline
+```
+
+Output:
+
+- `artifacts/evaluation/pipeline_evaluation_results.csv`
 
 ## Training Stages Results (Priority Classification)
 
