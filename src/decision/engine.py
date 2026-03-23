@@ -489,6 +489,7 @@ def run_full_pipeline_structured(
     queue: str,
     top_k: int = 3,
     include_debug: bool = False,
+    resources: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     print("[DEBUG] run_full_pipeline_structured started")
     retrieval_top_k = max(top_k * 3, 8)
@@ -498,6 +499,9 @@ def run_full_pipeline_structured(
         ticket_type=ticket_type,
         queue=queue,
         top_k=retrieval_top_k,
+        model=resources.get("model") if resources else None,
+        embedder=resources.get("embedder") if resources else None,
+        collection=resources.get("collection") if resources else None,
     )
     print(
         f"[DEBUG] after retrieval: predicted_priority={result.get('predicted_priority')}, "
@@ -613,6 +617,7 @@ def run_full_pipeline_structured_debug(
     ticket_type: str,
     queue: str,
     top_k: int = 3,
+    resources: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     return run_full_pipeline_structured(
         issue_description=issue_description,
@@ -620,4 +625,5 @@ def run_full_pipeline_structured_debug(
         queue=queue,
         top_k=top_k,
         include_debug=True,
+        resources=resources,
     )

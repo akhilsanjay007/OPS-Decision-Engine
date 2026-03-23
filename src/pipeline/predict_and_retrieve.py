@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import joblib
 import re
+from threading import Lock
 from typing import Dict, Any, List
 
 import pandas as pd
@@ -25,6 +26,7 @@ EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 _CACHED_ML_MODEL = None
 _CACHED_EMBEDDER = None
 _CACHED_COLLECTION = None
+_RESOURCE_LOCK = Lock()
 
 
 # ---------------- LOAD ML MODEL ---------------- #
@@ -36,15 +38,15 @@ def load_ml_model():
 
 def initialize_resources() -> None:
     global _CACHED_ML_MODEL, _CACHED_EMBEDDER, _CACHED_COLLECTION
+    with _RESOURCE_LOCK:
+        if _CACHED_ML_MODEL is None:
+            _CACHED_ML_MODEL = load_ml_model()
 
-    if _CACHED_ML_MODEL is None:
-        _CACHED_ML_MODEL = load_ml_model()
+        if _CACHED_EMBEDDER is None:
+            _CACHED_EMBEDDER = load_embedder(EMBED_MODEL)
 
-    if _CACHED_EMBEDDER is None:
-        _CACHED_EMBEDDER = load_embedder(EMBED_MODEL)
-
-    if _CACHED_COLLECTION is None:
-        _CACHED_COLLECTION = load_collection(CHROMA_PATH, COLLECTION_NAME)
+        if _CACHED_COLLECTION is None:
+            _CACHED_COLLECTION = load_collection(CHROMA_PATH, COLLECTION_NAME)
 
 
 def get_cached_resources():
@@ -147,14 +149,18 @@ def run_pipeline(
     ticket_type: str,
     queue: str,
     top_k: int = 3,
+    model=None,
+    embedder=None,
+    collection=None,
 ) -> Dict[str, Any]:
 
     print("\n" + "=" * 120)
     print("OPS DECISION ENGINE - PREDICT + RETRIEVE")
     print("=" * 120)
 
-    # 1) Get cached heavy resources
-    model, embedder, collection = get_cached_resources()
+    # 1) Use preloaded resources when provided; otherwise fallback to cache
+    if model is None or embedder is None or collection is None:
+        model, embedder, collection = get_cached_resources()
 
     # 2) Predict priority
     predicted_priority = predict_priority(
