@@ -99,6 +99,31 @@ Evaluation run (writes a CSV summary to `artifacts/evaluation/pipeline_evaluatio
 python -m tests.evaluate_pipeline
 ```
 
+### 4) Run FastAPI backend
+
+From the repo root:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+Then open:
+
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Health check: `http://127.0.0.1:8000/health`
+
+For `/predict`, set your OpenAI key first (PowerShell):
+
+```powershell
+$env:OPENAI_API_KEY = "your-key-here"
+```
+
+Notes:
+
+- The backend now emits `[DEBUG]` logs for each major stage of `run_full_pipeline_structured()` (retrieval, rerank, dedupe, recommendation, confidence, prompt build, OpenAI return, parsing, evidence build, final return).
+- If `/predict` fails, the API logs `[ERROR] /predict failed` and a full traceback in the terminal.
+- If the OpenAI call fails, the engine logs `[ERROR] OpenAI call failed: <error>` and re-raises.
+
 ## Data Workflow (Recommended)
 
 Use a strict flow to keep outputs reproducible:
