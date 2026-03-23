@@ -44,6 +44,9 @@ def run_tests():
         print("\n" + "#" * 120)
         print(f"TEST {idx}: {test['name']}")
         print("#" * 120)
+        print(f"Issue : {test['issue']}")
+        print(f"Type  : {test['type']}")
+        print(f"Queue : {test['queue']}")
 
         try:
             decision = run_full_pipeline(
@@ -51,6 +54,7 @@ def run_tests():
                 ticket_type=test["type"],
                 queue=test["queue"],
                 top_k=3,
+                verbose=False,
             )
 
             print("\n" + "-" * 120)
@@ -65,5 +69,3 @@ def run_tests():
 
 if __name__ == "__main__":
     run_tests()
-
-# python -m tests.test_predict_retrieve_generate
