@@ -15,20 +15,6 @@ Ops Decision Engine is now organized as a clean full-stack workspace:
 
 ---
 
-## Dataset Source
-
-This project uses the Kaggle dataset:
-
-- [Multilingual Customer Support Tickets](https://www.kaggle.com/datasets/tobiasbueck/multilingual-customer-support-tickets)
-
-Expected source CSV location:
-
-- `data/raw/aa_dataset-tickets-multi-lang-5-2-50-version.csv`
-
-If your file name differs, update notebook/script paths accordingly.
-
----
-
 ## Folder Structure
 
 ```text
@@ -137,40 +123,6 @@ Frontend URL:
 - **Backend:** complete v1 (FastAPI decision engine + ML/RAG pipeline)
 - **Frontend:** working demo UI in isolated `frontend/` app
 - **Data mode:** currently mocked in UI; API integration mode is planned
-
----
-
-## Model and LLM Scores
-
-### Priority Model Training Scores
-
-| Stage | Training script | Outputs folder | Approach (high level) | Accuracy | Macro F1 | Weighted F1 |
-|---|---|---|---|---:|---:|---:|
-| `baseline` | `src/ml/train_baseline.py` | `outputs/ml/baseline/` | TF-IDF (text-only) + Logistic Regression | 0.5471 | 0.5029 | 0.5336 |
-| `stage2` | `src/ml/train_stage2.py` | `outputs/ml/stage2/` | TF-IDF (text-only, 1-2 grams) + Logistic Regression | 0.6196 | 0.6122 | 0.6211 |
-| `stage3` | `src/ml/train_stage3.py` | `outputs/ml/stage3/` | TF-IDF (text) + OneHot(type, queue) + Logistic Regression | 0.6368 | 0.6301 | 0.6379 |
-| `stage4` | `src/ml/train_stage4.py` | `outputs/ml/stage4/` | TF-IDF + OneHot(type, queue) + scaled engineered keyword features + Logistic Regression | 0.6334 | 0.6271 | 0.6342 |
-| `stage5_svm` | `src/ml/train_stage5_svm.py` | `outputs/ml/stage5_svm/` | TF-IDF + OneHot(type, queue) + LinearSVC | 0.7111 | 0.7018 | 0.7110 |
-
-### LLM and Pipeline Evaluation Outputs
-
-Run:
-
-```powershell
-python -m tests.evaluate_pipeline
-```
-
-Evaluation output file:
-
-- `artifacts/evaluation/pipeline_evaluation_results.csv`
-
-This report includes per-case outputs such as:
-
-- ML priority prediction
-- Rule-based recommended priority
-- LLM priority extracted from generated output
-- Confidence score / confidence level
-- Escalation recommendation and evidence metrics
 
 ---
 
