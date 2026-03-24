@@ -4,6 +4,7 @@ import ActionsCard from "@/components/dashboard/actions-card";
 import DebugTabs from "@/components/dashboard/debug-tabs";
 import EmptyState from "@/components/dashboard/analysis-empty-state";
 import InfoCard from "@/components/dashboard/info-card";
+import ErrorState from "@/components/dashboard/analysis-error-state";
 import LoadingState from "@/components/dashboard/analysis-loading-state";
 import SimilarIncidents from "@/components/dashboard/similar-incidents";
 import SummaryCards from "@/components/dashboard/summary-cards";
@@ -13,6 +14,7 @@ type AnalysisWorkspaceProps = {
   ticket?: Ticket | null;
   result?: AnalysisResult | null;
   loading?: boolean;
+  error?: string | null;
   debugMode?: boolean;
 };
 
@@ -20,6 +22,7 @@ export default function AnalysisWorkspace({
   ticket,
   result,
   loading = false,
+  error = null,
   debugMode = false,
 }: AnalysisWorkspaceProps) {
   if (!ticket) {
@@ -28,6 +31,10 @@ export default function AnalysisWorkspace({
 
   if (loading) {
     return <LoadingState />;
+  }
+
+  if (error) {
+    return <ErrorState message={error} />;
   }
 
   if (!result) {

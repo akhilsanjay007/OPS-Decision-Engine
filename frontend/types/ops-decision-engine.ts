@@ -18,13 +18,22 @@ export interface SimilarIncident {
   resolution: string;
 }
 
+/** Values are JSON-stringified in DebugTabs; use `unknown` for strings or structured lists. */
 export interface DebugTrace {
-  rawRetrieval: string[];
-  rerankedResults: string[];
-  deduplicatedResults: string[];
+  rawRetrieval: unknown;
+  rerankedResults: unknown;
+  deduplicatedResults: unknown;
   prompt: string;
   rawLlmOutput: string;
 }
+
+export const EMPTY_DEBUG_TRACE: DebugTrace = {
+  rawRetrieval: [],
+  rerankedResults: [],
+  deduplicatedResults: [],
+  prompt: "",
+  rawLlmOutput: "",
+};
 
 export interface AnalysisResult {
   ml_priority: string;

@@ -7,7 +7,8 @@ import ControlBar from "@/components/dashboard/control-bar";
 import Header from "@/components/dashboard/header";
 import ManualTicketModal from "@/components/dashboard/manual-ticket-modal";
 import TicketStream from "@/components/dashboard/ticket-stream";
-import { getMockAnalysisResult, mockTickets } from "@/lib/mock-data";
+import { analyzeTicket, getApiErrorMessage } from "@/lib/api";
+import { mockTickets } from "@/lib/mock-data";
 import type { AnalysisResult, Ticket } from "@/types/ops-decision-engine";
 
 type ManualTicketInput = {
@@ -45,14 +46,14 @@ export default function DashboardPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [simulationRunning, setSimulationRunning] = useState(false);
   const [speed, setSpeed] = useState("Normal");
   const [manualModalOpen, setManualModalOpen] = useState(false);
   const [nextTicketIndex, setNextTicketIndex] = useState(0);
-
-  const analysisTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const analysisSeqRef = useRef(0);
 
   const simulationDelay = useMemo(
     () => SPEED_TO_DELAY_MS[speed] ?? SPEED_TO_DELAY_MS.Normal,
@@ -79,27 +80,29 @@ export default function DashboardPage() {
     }
   }, [nextTicketIndex]);
 
-  useEffect(() => {
-    return () => {
-      if (analysisTimeoutRef.current) {
-        clearTimeout(analysisTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const runAnalysis = (ticket: Ticket) => {
+  const runAnalysis = async (ticket: Ticket) => {
+    const seq = ++analysisSeqRef.current;
     setSelectedTicket(ticket);
     setLoading(true);
     setAnalysisResult(null);
+    setAnalysisError(null);
 
-    if (analysisTimeoutRef.current) {
-      clearTimeout(analysisTimeoutRef.current);
+    try {
+      const result = await analyzeTicket(ticket, debugMode);
+      if (seq !== analysisSeqRef.current) {
+        return;
+      }
+      setAnalysisResult(result);
+    } catch (err) {
+      if (seq !== analysisSeqRef.current) {
+        return;
+      }
+      setAnalysisError(getApiErrorMessage(err));
+    } finally {
+      if (seq === analysisSeqRef.current) {
+        setLoading(false);
+      }
     }
-
-    analysisTimeoutRef.current = setTimeout(() => {
-      setAnalysisResult(getMockAnalysisResult(ticket));
-      setLoading(false);
-    }, 1000);
   };
 
   const handleStart = () => setSimulationRunning(true);
@@ -110,11 +113,9 @@ export default function DashboardPage() {
     setTickets([]);
     setSelectedTicket(null);
     setAnalysisResult(null);
+    setAnalysisError(null);
     setLoading(false);
     setNextTicketIndex(0);
-    if (analysisTimeoutRef.current) {
-      clearTimeout(analysisTimeoutRef.current);
-    }
   };
 
   const handleManualTicket = () => setManualModalOpen(true);
@@ -157,6 +158,7 @@ export default function DashboardPage() {
                 ticket={selectedTicket}
                 result={analysisResult}
                 loading={loading}
+                error={analysisError}
                 debugMode={debugMode}
               />
             </section>

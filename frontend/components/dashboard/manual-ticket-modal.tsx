@@ -66,7 +66,7 @@ export default function ManualTicketModal({
   const [queue, setQueue] = useState<string>(QUEUE_OPTIONS[0]);
 
   const canSubmit = useMemo(
-    () => issueDescription.trim().length > 0,
+    () => issueDescription.trim().length >= 5,
     [issueDescription]
   );
 

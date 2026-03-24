@@ -1,1 +1,1 @@
-export { getMockAnalysisResult, mockTickets } from "@/data/mock-dashboard-data";
+export { mockTickets } from "@/data/mock-dashboard-data";

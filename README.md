@@ -81,8 +81,20 @@ From repo root:
 ```powershell
 cd frontend
 npm install
+copy .env.example .env.local
 npm run dev
 ```
+
+Configure the dashboard API target in `frontend/.env.local`:
+
+- **`NEXT_PUBLIC_API_URL`** — Base URL of the FastAPI app (e.g. `http://localhost:8000`). If unset, the UI defaults to `http://localhost:8000`.
+
+The analysis workspace calls:
+
+- **`POST /predict`** when debug mode is off
+- **`POST /predict/debug`** when debug mode is on
+
+**Important:** Start the backend before selecting a ticket or submitting a manual ticket; analysis requests are sent to the live API. The decision pipeline uses the LLM layer: set **`OPENAI_API_KEY`** in the backend environment (see above) or `/predict` may return an error; the dashboard will show the API error message.
 
 Frontend URL:
 
@@ -97,32 +109,26 @@ Frontend URL:
   ```powershell
    uvicorn app.main:app --reload
   ```
-2. In a second terminal, start frontend:
+2. In a second terminal, start frontend (with `NEXT_PUBLIC_API_URL` pointing at that API if it is not on `http://localhost:8000`):
   ```powershell
    cd frontend
    npm run dev
   ```
-3. 
-  Open `http://localhost:3000/dashboard`.
+3. Open `http://localhost:3000/dashboard`.
 4. Validate core flows:
-  - **Simulation mode:** click **Start Simulation**, observe tickets entering stream over time.
+  - **Simulation mode:** click **Start Simulation**, observe tickets entering stream over time (stream remains mocked/local).
   - **Speed control:** switch Slow/Normal/Fast and verify arrival cadence changes.
   - **Pause/Clear:** pause should stop arrivals; clear should reset stream and analysis.
-  - **Ticket selection:** selecting a ticket shows loading, then analysis panels.
-  - **Manual ticket mode:** open **Manual Ticket**, submit issue, verify it appears and runs analysis.
-  - **Debug mode:** toggle debug to show/hide trace tabs.
-5. API integration path (next phase):
-  - Replace mocked analysis calls with backend requests to:
-    - `POST /predict`
-    - `POST /predict/debug`
+  - **Ticket selection:** selecting a ticket shows loading, then live analysis from the backend.
+  - **Manual ticket mode:** open **Manual Ticket**, submit an issue (at least 5 characters, per API validation), verify it appears and runs analysis.
+  - **Debug mode:** toggle debug so requests use `/predict/debug` and the **Debug Trace** tabs show retrieval and prompt data from the backend.
 
 ---
 
 ## Current Status
 
 - **Backend:** complete v1 (FastAPI decision engine + ML/RAG pipeline)
-- **Frontend:** working demo UI in isolated `frontend/` app
-- **Data mode:** currently mocked in UI; API integration mode is planned
+- **Frontend:** Next.js dashboard with live analysis integration; incident simulation stream remains mock-driven
 
 ---
 
@@ -140,7 +146,7 @@ Frontend URL:
     uvicorn app.main:app --reload
     ```
 - **CORS errors (when UI calls API)**
-  - Configure FastAPI CORS middleware to allow `http://localhost:3000`.
+  - The bundled backend uses permissive CORS (`allow_origins=["*"]`). If you tighten CORS in `app/main.py`, add your frontend origin (e.g. `http://localhost:3000`) to the allowed list.
 - **Bad API URL in frontend**
   - Verify frontend base URL points to `http://127.0.0.1:8000`.
 - **Import/path errors in frontend**
