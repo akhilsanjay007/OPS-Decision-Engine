@@ -224,3 +224,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# python -m tests.evaluate_pipeline
