@@ -2,6 +2,7 @@
 venv/
 
 .cursor/
+.vscode/
 
 .ipynb_checkpoints/
 
@@ -41,4 +42,12 @@ data/raw/**/*.csv
 build/
 dist/
 *.egg-info/
+
+# Frontend (Next.js) build/runtime artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/.env.local
+frontend/.env.*.local
 
