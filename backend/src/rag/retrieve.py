@@ -8,10 +8,12 @@ from typing import Any, List, Dict
 import chromadb
 from sentence_transformers import SentenceTransformer
 
+from src.runtime_paths import get_chroma_db_dir
+
 
 # ---------------- CONFIG ---------------- #
 
-DEFAULT_CHROMA_PATH = "artifacts/rag/chroma_db"
+DEFAULT_CHROMA_PATH = str(get_chroma_db_dir())
 DEFAULT_COLLECTION_NAME = "incident_memory"
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 

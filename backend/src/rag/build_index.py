@@ -3,6 +3,8 @@ import json
 import chromadb
 from sentence_transformers import SentenceTransformer
 
+from src.runtime_paths import get_chroma_db_dir, get_kb_path
+
 
 def load_jsonl(file_path: str):
     """
@@ -31,8 +33,8 @@ def build_index():
     """
     Build a Chroma vector index from the RAG knowledge base.
     """
-    input_path = "data/processed/rag_knowledge_base.jsonl"
-    chroma_path = "artifacts/rag/chroma_db"
+    input_path = str(get_kb_path())
+    chroma_path = str(get_chroma_db_dir())
     collection_name = "incident_memory"
 
     # Safe batch size below Chroma's max batch size

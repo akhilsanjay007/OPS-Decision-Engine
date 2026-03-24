@@ -10,13 +10,11 @@ import pandas as pd
 
 from src.rag.retrieve import retrieve_similar_incidents
 from src.rag.retrieve import load_embedder, load_collection
+from src.runtime_paths import get_chroma_db_dir, get_model_path
 
 
 # ---------------- CONFIG ---------------- #
 
-ML_MODEL_PATH = "artifacts/ml/priority_stage5_svm_pipeline.joblib"
-
-CHROMA_PATH = "artifacts/rag/chroma_db"
 COLLECTION_NAME = "incident_memory"
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -32,8 +30,9 @@ _RESOURCE_LOCK = Lock()
 # ---------------- LOAD ML MODEL ---------------- #
 
 def load_ml_model():
-    print(f"[INFO] Loading ML model from: {ML_MODEL_PATH}")
-    return joblib.load(ML_MODEL_PATH)
+    path = get_model_path()
+    print(f"[INFO] Loading ML model from: {path}")
+    return joblib.load(path)
 
 
 def initialize_resources() -> None:
@@ -46,7 +45,7 @@ def initialize_resources() -> None:
             _CACHED_EMBEDDER = load_embedder(EMBED_MODEL)
 
         if _CACHED_COLLECTION is None:
-            _CACHED_COLLECTION = load_collection(CHROMA_PATH, COLLECTION_NAME)
+            _CACHED_COLLECTION = load_collection(str(get_chroma_db_dir()), COLLECTION_NAME)
 
 
 def get_cached_resources():
@@ -179,7 +178,7 @@ def run_pipeline(
     # 4) Retrieve incidents
     retrieved = retrieve_similar_incidents(
         query=query,
-        chroma_path=CHROMA_PATH,
+        chroma_path=str(get_chroma_db_dir()),
         collection_name=COLLECTION_NAME,
         model_name=EMBED_MODEL,
         top_k=top_k,

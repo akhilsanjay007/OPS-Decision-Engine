@@ -1,7 +1,8 @@
 from src.rag.retrieve import retrieve_similar_incidents
+from src.runtime_paths import get_chroma_db_dir
 
 
-CHROMA_PATH = "artifacts/rag/chroma_db"
+CHROMA_PATH = str(get_chroma_db_dir())
 COLLECTION_NAME = "incident_memory"
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 

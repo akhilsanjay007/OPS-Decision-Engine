@@ -14,12 +14,13 @@ Why this matters
 
 Model used
 ----------
-Stage 5 Linear SVM model:
-artifacts/ml/priority_stage5_svm_pipeline.joblib
+Stage 5 Linear SVM model (see MODEL_PATH / ``src.runtime_paths.get_model_path()``).
 """
 
 import joblib
 import pandas as pd
+
+from src.runtime_paths import get_model_path
 
 
 def load_model(model_path: str):
@@ -188,7 +189,7 @@ def main():
     """
     Main edge-case testing flow.
     """
-    model_path = "artifacts/ml/priority_stage5_svm_pipeline.joblib"
+    model_path = str(get_model_path())
     output_path = "outputs/ml/stage5_svm/edge_case_predictions.csv"
 
     model = load_model(model_path)

@@ -1,82 +1,143 @@
 # Ops Decision Engine
 
-Ops Decision Engine is now organized as a clean full-stack workspace:
-
-- **Backend:** FastAPI + ML/RAG decision engine
-- **Frontend:** isolated Next.js demo dashboard UI
+Monorepo for the Ops Decision Engine: a **FastAPI** backend (ML + RAG + LLM) and a **Next.js** operations dashboard.
 
 ---
 
-## Project Overview
-
-- `app/` + `src/` power the backend decision services and pipelines.
-- `frontend/` contains the UI app (dark operations dashboard, mocked simulation flow, analysis workspace).
-- Backend and frontend are intentionally separated so they can evolve independently.
-
----
-
-## Folder Structure
+## Repository layout
 
 ```text
 Ops Decision Engine/
-├── app/                    # FastAPI backend entrypoints and schemas
-├── src/                    # ML, RAG, and decision pipeline logic
-├── artifacts/              # model/index/evaluation artifacts
-├── data/                   # backend data assets
-├── notebooks/              # analysis notebooks
-├── outputs/                # generated backend outputs
-├── scripts/                # helper scripts
-├── tests/                  # backend/pipeline tests
-├── frontend/               # isolated Next.js frontend app
+├── backend/                 # Python API, pipelines, tests, runtime assets
+│   ├── app/                 # FastAPI (routes, schemas, service)
+│   ├── src/                 # ML, RAG, decision pipeline
+│   ├── tests/               # Backend tests
+│   ├── models/              # Deployed priority model (joblib)
+│   ├── data/                # Chroma vector DB + processed RAG JSONL (see .gitignore)
+│   ├── artifacts/           # Training outputs, evaluation CSVs (typically gitignored)
+│   ├── notebooks/         # Analysis notebooks (gitignored by default)
+│   ├── outputs/             # Generated outputs (gitignored)
+│   ├── scripts/             # Helper scripts
+│   ├── requirements.txt
+│   └── .env.example         # Env var template (copy to `.env` in backend/)
+├── frontend/                # Next.js UI
 │   ├── app/
 │   ├── components/
-│   ├── data/
 │   ├── lib/
 │   ├── types/
 │   ├── public/
 │   ├── package.json
-│   ├── tsconfig.json
-│   ├── tailwind.config.ts
-│   └── postcss.config.mjs
-├── requirements.txt
+│   └── ...
+├── .gitignore
 └── README.md
 ```
 
 ---
 
-## Backend Setup and Run (FastAPI)
+## Dataset
 
-From repo root:
+Training and RAG preparation use the **Multilingual Customer Support Tickets** dataset. The canonical raw export used in this project is **`aa_dataset-tickets-multi-lang-5-2-50-version.csv`**.
+
+- **Kaggle (source):** [Multilingual Customer Support Tickets](https://www.kaggle.com/datasets/tobiasbueck/multilingual-customer-support-tickets?select=aa_dataset-tickets-multi-lang-5-2-50-version.csv)
+- **Hugging Face (mirror):** [Tobi-Bueck/customer-support-tickets](https://huggingface.co/datasets/Tobi-Bueck/customer-support-tickets)
+
+After download, place the CSV under **`backend/data/raw/`** for the notebooks and training scripts (that folder stays out of git for size).
+
+---
+
+## Model performance (priority classifier)
+
+All rows use the **same held-out test set** (**n = 3,268**), three-class priority (**HIGH / MEDIUM / LOW**). Metrics come from `backend/outputs/ml/<run>/metrics.json`; per-class precision/recall/F1 are in the matching `classification_report.json`.
+
+### Comparison across training stages
+
+| Approach | Accuracy | Macro F1 | Weighted F1 |
+|----------|----------|----------|-------------|
+| Baseline | 54.7% | 0.503 | 0.534 |
+| Stage 2 | 62.0% | 0.612 | 0.621 |
+| Stage 3 | 63.7% | 0.630 | 0.638 |
+| Stage 4 | 63.3% | 0.627 | 0.634 |
+| **Stage 5 (LinearSVC)** — **deployed** | **71.1%** | **0.702** | **0.711** |
+
+Stage 5 improves over the baseline by **~16.4 points** accuracy and **~0.20** macro F1 on this split. The API loads **`models/priority_stage5_svm_pipeline.joblib`** by default (`MODEL_PATH`).
+
+---
+
+## End-to-end pipeline evaluation
+
+This runs **predict → retrieve → rerank → LLM decision** on fixed **test scenarios** (not the REST API). Requires **`OPENAI_API_KEY`**.
+
+From **`backend/`**:
+
+```powershell
+python -m tests.evaluate_pipeline
+```
+
+Writes **`backend/artifacts/evaluation/pipeline_evaluation_results.csv`** and prints per-case fields (ML priority, rule-based recommendation, LLM priority, confidence, escalation, etc.) plus a short summary.
+
+**Retrieval-only** (embedding + Chroma, no LLM):
+
+```powershell
+cd backend
+python -m tests.test_retrieval
+```
+
+VS Code tasks **Tests: evaluate pipeline** and **Tests: retrieval** use **`backend/`** as the working directory.
+
+---
+
+## Backend (FastAPI)
+
+### Runtime paths (environment variables)
+
+All paths are resolved relative to the **`backend/`** directory unless set to an absolute path.
+
+| Variable        | Default (under `backend/`)                         | Purpose                          |
+|----------------|-----------------------------------------------------|----------------------------------|
+| `MODEL_PATH`   | `models/priority_stage5_svm_pipeline.joblib`       | ML priority pipeline             |
+| `CHROMA_DB_DIR`| `data/chroma`                                      | Persisted Chroma vector store    |
+| `KB_PATH`      | `data/processed/rag_knowledge_base.jsonl`          | RAG knowledge base (JSONL)       |
+
+Optional: copy `backend/.env.example` to `backend/.env` and set values. For LLM generation, set **`OPENAI_API_KEY`**.
+
+### Install and run
+
+From the **repository root**:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-Run API:
+Run the API **from `backend/`** so imports resolve correctly:
 
 ```powershell
+cd backend
 uvicorn app.main:app --reload
 ```
 
-Backend URLs:
-
 - Swagger: `http://127.0.0.1:8000/docs`
 - Health: `http://127.0.0.1:8000/health`
-
-If using LLM generation endpoints:
 
 ```powershell
 $env:OPENAI_API_KEY = "your-key-here"
 ```
 
+### Tests
+
+```powershell
+cd backend
+python -m pip install pytest
+python -m pytest
+```
+
 ---
 
-## Frontend Setup and Run (Next.js)
+## Frontend (Next.js)
 
-From repo root:
+From **repository root**:
 
 ```powershell
 cd frontend
@@ -85,71 +146,35 @@ copy .env.example .env.local
 npm run dev
 ```
 
-Configure the dashboard API target in `frontend/.env.local`:
+In `frontend/.env.local`:
 
 - **`NEXT_PUBLIC_API_URL`** — Base URL of the FastAPI app (e.g. `http://localhost:8000`). If unset, the UI defaults to `http://localhost:8000`.
 
-The analysis workspace calls:
+The dashboard calls **`POST /predict`** or **`POST /predict/debug`** (when debug mode is on). Start the **backend** first; set **`OPENAI_API_KEY`** on the backend for successful analysis responses.
 
-- **`POST /predict`** when debug mode is off
-- **`POST /predict/debug`** when debug mode is on
-
-**Important:** Start the backend before selecting a ticket or submitting a manual ticket; analysis requests are sent to the live API. The decision pipeline uses the LLM layer: set **`OPENAI_API_KEY`** in the backend environment (see above) or `/predict` may return an error; the dashboard will show the API error message.
-
-Frontend URL:
-
-- Dashboard app: `http://localhost:3000`
-- Dashboard route: `http://localhost:3000/dashboard`
+- App: `http://localhost:3000`
+- Dashboard: `http://localhost:3000/dashboard`
 
 ---
 
-## How to Test the UI
+## Local dev: backend + frontend
 
-1. Start backend first:
-  ```powershell
+1. Terminal A — backend:
+   ```powershell
+   cd backend
    uvicorn app.main:app --reload
-  ```
-2. In a second terminal, start frontend (with `NEXT_PUBLIC_API_URL` pointing at that API if it is not on `http://localhost:8000`):
-  ```powershell
+   ```
+2. Terminal B — frontend:
+   ```powershell
    cd frontend
    npm run dev
-  ```
+   ```
 3. Open `http://localhost:3000/dashboard`.
-4. Validate core flows:
-  - **Simulation mode:** click **Start Simulation**, observe tickets entering stream over time (stream remains mocked/local).
-  - **Speed control:** switch Slow/Normal/Fast and verify arrival cadence changes.
-  - **Pause/Clear:** pause should stop arrivals; clear should reset stream and analysis.
-  - **Ticket selection:** selecting a ticket shows loading, then live analysis from the backend.
-  - **Manual ticket mode:** open **Manual Ticket**, submit an issue (at least 5 characters, per API validation), verify it appears and runs analysis.
-  - **Debug mode:** toggle debug so requests use `/predict/debug` and the **Debug Trace** tabs show retrieval and prompt data from the backend.
-
----
-
-## Current Status
-
-- **Backend:** complete v1 (FastAPI decision engine + ML/RAG pipeline)
-- **Frontend:** Next.js dashboard with live analysis integration; incident simulation stream remains mock-driven
 
 ---
 
 ## Troubleshooting
 
-- **Frontend dependencies missing**
-  - Run:
-    ```powershell
-    cd frontend
-    npm install
-    ```
-- **Backend not running**
-  - Ensure venv is active and run:
-    ```powershell
-    uvicorn app.main:app --reload
-    ```
-- **CORS errors (when UI calls API)**
-  - The bundled backend uses permissive CORS (`allow_origins=["*"]`). If you tighten CORS in `app/main.py`, add your frontend origin (e.g. `http://localhost:3000`) to the allowed list.
-- **Bad API URL in frontend**
-  - Verify frontend base URL points to `http://127.0.0.1:8000`.
-- **Import/path errors in frontend**
-  - Confirm you run commands inside `frontend/`.
-  - Ensure alias imports use `@/` and `frontend/tsconfig.json` is present.
-
+- **Imports fail when running uvicorn** — Run commands with **`backend/`** as the current working directory.
+- **Frontend cannot reach API** — Confirm `NEXT_PUBLIC_API_URL` and that the backend is listening. If you restrict CORS in `backend/app/main.py`, allow the frontend origin (e.g. `http://localhost:3000`).
+- **Large Chroma files** — Vector DB under `backend/data/chroma/` may use **Git LFS** (see `.gitattributes`). Install [Git LFS](https://git-lfs.com/) and run `git lfs install` before clone/pull.

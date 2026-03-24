@@ -4,6 +4,9 @@ venv/
 .cursor/
 .vscode/
 
+# Optional empty duplicate at repo root (notebooks live under backend/notebooks/)
+/notebooks/
+
 .ipynb_checkpoints/
 
 __pycache__/
@@ -16,23 +19,23 @@ __pycache__/
 *.log
 .env
 .env.*
+!.env.example
+!**/.env.example
 
-# --- Data: ignore everything under data/ except runtime Chroma + RAG JSONL ---
-data/**
-!data/chroma/
-!data/chroma/**
-!data/processed/
-data/processed/**
-!data/processed/rag_knowledge_base.jsonl
+# --- Backend data: ignore under backend/data except runtime Chroma + RAG JSONL ---
+backend/data/**
+!backend/data/chroma/
+!backend/data/chroma/**
+!backend/data/processed/
+backend/data/processed/**
+!backend/data/processed/rag_knowledge_base.jsonl
 
-# Never track raw/interim (explicit; also covered by data/**)
-data/raw/
-data/interim/
+backend/data/raw/
+backend/data/interim/
 
-outputs/
-artifacts/
-
-notebooks/
+backend/outputs/
+backend/artifacts/
+backend/notebooks/
 
 # Cache
 *.cache
@@ -49,7 +52,7 @@ frontend/.env.*.local
 # ML artifacts by extension; allow the deployed priority model only
 *.pkl
 *.joblib
-!models/priority_stage5_svm_pipeline.joblib
+!backend/models/priority_stage5_svm_pipeline.joblib
 *.pt
 *.pth
 *.ckpt
