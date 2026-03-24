@@ -17,21 +17,39 @@ __pycache__/
 .env
 .env.*
 
-# Data outputs / artifacts
+# --- Data: ignore everything under data/ except runtime Chroma + RAG JSONL ---
+data/**
+!data/chroma/
+!data/chroma/**
+!data/processed/
+data/processed/**
+!data/processed/rag_knowledge_base.jsonl
+
+# Never track raw/interim (explicit; also covered by data/**)
+data/raw/
 data/interim/
-data/processed/
+
 outputs/
 artifacts/
-!artifacts/ml/
-!artifacts/ml/.gitkeep
 
-# Raw datasets can be large; keep them out of git
-data/raw/*.csv
-data/raw/**/*.csv
+notebooks/
 
-# ML / model artifacts
+# Cache
+*.cache
+.cache/
+
+# Frontend (Next.js) build/runtime artifacts
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/.env.local
+frontend/.env.*.local
+
+# ML artifacts by extension; allow the deployed priority model only
 *.pkl
 *.joblib
+!models/priority_stage5_svm_pipeline.joblib
 *.pt
 *.pth
 *.ckpt
@@ -42,12 +60,3 @@ data/raw/**/*.csv
 build/
 dist/
 *.egg-info/
-
-# Frontend (Next.js) build/runtime artifacts
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-frontend/.turbo/
-frontend/.env.local
-frontend/.env.*.local
-
