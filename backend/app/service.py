@@ -1,5 +1,13 @@
 from typing import Any, Dict
 from threading import Lock
+
+from src.core.config import (
+    CHROMA_DIR,
+    KB_PATH,
+    MODEL_PATH,
+    get_openai_model,
+    is_openai_configured,
+)
 from src.decision.engine import run_full_pipeline_structured
 from src.decision.engine import run_full_pipeline_structured_debug
 from src.pipeline.predict_and_retrieve import initialize_resources, get_cached_resources
@@ -19,6 +27,13 @@ class OpsDecisionService:
 
             try:
                 print("[INFO] Initializing backend resources...")
+                print(
+                    f"[INFO] OPENAI_API_KEY: {'set' if is_openai_configured() else 'not set'} "
+                    f"(OPENAI_MODEL={get_openai_model()!r})"
+                )
+                print(f"[INFO] MODEL_PATH: {MODEL_PATH}")
+                print(f"[INFO] CHROMA_DIR: {CHROMA_DIR}")
+                print(f"[INFO] KB_PATH: {KB_PATH}")
                 initialize_resources()
                 model, embedder, collection = get_cached_resources()
                 self._resources = {
@@ -37,7 +52,12 @@ class OpsDecisionService:
 
     def health(self) -> Dict[str, Any]:
         status = "ok" if self.ready else "degraded"
-        payload: Dict[str, Any] = {"status": status, "service": "ops-decision-engine"}
+        payload: Dict[str, Any] = {
+            "status": status,
+            "service": "ops-decision-engine",
+            "openai_configured": is_openai_configured(),
+            "openai_model": get_openai_model(),
+        }
         if self.init_error:
             payload["init_error"] = self.init_error
         return payload

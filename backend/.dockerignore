@@ -1,0 +1,17 @@
+# Python / tooling
+venv
+.venv
+__pycache__/
+*.pyc
+
+# Notebooks and generated artifacts
+notebooks/
+*.ipynb
+outputs/
+
+# Raw/interim data (keep persisted Chroma and processed KB)
+data/raw/
+data/interim/
+raw/
+interim/
+

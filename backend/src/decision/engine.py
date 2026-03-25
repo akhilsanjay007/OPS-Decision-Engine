@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-import os
 import re
 from collections import Counter
 from difflib import SequenceMatcher
 from typing import Dict, Any, List
 
-from openai import OpenAI, OpenAIError
+from openai import OpenAI
+from src.core.config import get_openai_api_key, get_openai_model, is_openai_configured
 from src.pipeline.predict_and_retrieve import run_pipeline
-
-OPENAI_MODEL = "gpt-4o-mini"
 
 QUEUE_BOOST = 0.15
 TYPE_BOOST = 0.05
@@ -24,7 +22,7 @@ def get_openai_client() -> OpenAI:
     if client is not None:
         return client
 
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = get_openai_api_key()
     if not api_key:
         raise RuntimeError(
             "OPENAI_API_KEY is not set. Configure it in your environment to use the decision generator."
@@ -376,7 +374,7 @@ Escalation Recommendation:
 def generate_decision(prompt: str) -> str:
     try:
         response = get_openai_client().chat.completions.create(
-            model=OPENAI_MODEL,
+            model=get_openai_model(),
             messages=[
                 {
                     "role": "system",
@@ -394,6 +392,46 @@ def generate_decision(prompt: str) -> str:
         raise
 
     return response.choices[0].message.content.strip()
+
+
+def _fallback_llm_raw_decision(
+    *,
+    recommended_priority: str,
+    ml_predicted_priority: str,
+    confidence_score: float,
+    confidence_level: str,
+    reason: str,
+) -> str:
+    """
+    Synthetic LLM-shaped text so parse_decision_output produces a consistent API payload
+    when OpenAI is unavailable or the API call fails.
+    """
+    return f"""
+Assessment Summary:
+- Recommended Priority: {recommended_priority}
+- Confidence Score: {confidence_score}
+- Confidence Level: {confidence_level}
+- Why: {reason}
+
+Likely Root Cause:
+{reason}
+
+Evidence from Similar Incidents:
+- Use the structured evidence list returned by this API (ML + RAG) for similar past incidents.
+
+Immediate Actions:
+- Treat ML predicted priority ({ml_predicted_priority}) and recommended priority ({recommended_priority}) as operational signals.
+- Review retrieved incident evidence and apply your standard runbooks.
+- Set OPENAI_API_KEY (and optionally OPENAI_MODEL) to enable full LLM-generated guidance.
+
+Next Diagnostic Checks:
+- Follow queue-specific diagnostics; correlate with recent changes, dependencies, and observability data.
+
+Escalation Recommendation:
+- No
+- Team:
+- Reason: Automated escalation text requires LLM generation; configure OpenAI when ready.
+""".strip()
 
 
 def parse_section(text: str, header: str, next_headers: List[str]) -> str:
@@ -569,8 +607,39 @@ def run_full_pipeline_structured(
     )
     print(f"[DEBUG] after prompt build: prompt_chars={len(prompt)}")
 
-    decision_text = generate_decision(prompt)
-    print(f"[DEBUG] after OpenAI response returns: response_chars={len(decision_text)}")
+    if is_openai_configured():
+        try:
+            decision_text = generate_decision(prompt)
+            print(
+                f"[DEBUG] after OpenAI response returns: response_chars={len(decision_text)}"
+            )
+        except Exception as exc:
+            print(f"[WARN] OpenAI generation failed; using fallback response: {exc}")
+            reason = (
+                f"OpenAI request failed ({type(exc).__name__}). "
+                "ML priority and retrieval evidence remain valid."
+            )
+            decision_text = _fallback_llm_raw_decision(
+                recommended_priority=recommended_priority,
+                ml_predicted_priority=ml_predicted_priority,
+                confidence_score=confidence_score,
+                confidence_level=confidence_level,
+                reason=reason,
+            )
+    else:
+        print("[INFO] OPENAI_API_KEY not set; returning LLM fallback (ML + RAG still active).")
+        reason = (
+            "OPENAI_API_KEY is not set. ML predicted priority and RAG retrieval are still available; "
+            "configure the API key for full LLM-generated triage."
+        )
+        decision_text = _fallback_llm_raw_decision(
+            recommended_priority=recommended_priority,
+            ml_predicted_priority=ml_predicted_priority,
+            confidence_score=confidence_score,
+            confidence_level=confidence_level,
+            reason=reason,
+        )
+
     parsed = parse_decision_output(decision_text)
     print(
         "[DEBUG] after parsing decision output: "

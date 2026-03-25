@@ -28,6 +28,8 @@ Ops Decision Engine/
 │   ├── public/
 │   ├── package.json
 │   └── ...
+├── .env.example             # Template for root `.env` (Docker Compose, shared secrets)
+├── docker-compose.yml       # Run backend + frontend in Docker with env from root `.env`
 ├── .gitignore
 └── README.md
 ```
@@ -88,17 +90,32 @@ VS Code tasks **Tests: evaluate pipeline** and **Tests: retrieval** use **`backe
 
 ## Backend (FastAPI)
 
+### Environment variables
+
+| Variable | Required for startup | Purpose |
+|----------|----------------------|---------|
+| `OPENAI_API_KEY` | No | Full LLM-generated triage (`/predict`). If unset, the API still runs; ML + RAG run, and LLM-shaped fields use a safe fallback message. |
+| `OPENAI_MODEL` | No | OpenAI chat model (default `gpt-4o-mini`). |
+| `MODEL_PATH` | No | Joblib priority pipeline (see paths table below). |
+| `CHROMA_DIR` or `CHROMA_DB_DIR` | No | Chroma persistence directory. |
+| `KB_PATH` | No | JSONL knowledge base for index rebuild scripts. |
+| `ALLOWED_ORIGINS` | No | CORS allowlist (`*` or comma-separated origins). Used by `backend/app/main.py`. |
+
+At startup the backend logs whether `OPENAI_API_KEY` is set, the resolved `MODEL_PATH`, `CHROMA_DIR`, and `KB_PATH`. `GET /health` includes `openai_configured` and `openai_model`.
+
 ### Runtime paths (environment variables)
 
-All paths are resolved relative to the **`backend/`** directory unless set to an absolute path.
+With **`APP_HOME=/app`** (Docker), paths default under `/app/`. For **local** runs, `src/core/config.py` defaults `APP_HOME` to `/app` unless you set **`APP_HOME`** to the absolute path of your `backend` directory (or use absolute `MODEL_PATH` / `CHROMA_DIR` / `KB_PATH`).
 
-| Variable        | Default (under `backend/`)                         | Purpose                          |
-|----------------|-----------------------------------------------------|----------------------------------|
-| `MODEL_PATH`   | `models/priority_stage5_svm_pipeline.joblib`       | ML priority pipeline             |
-| `CHROMA_DB_DIR`| `data/chroma`                                      | Persisted Chroma vector store    |
-| `KB_PATH`      | `data/processed/rag_knowledge_base.jsonl`          | RAG knowledge base (JSONL)       |
+| Variable | Default (container / typical) | Purpose |
+|----------|-------------------------------|---------|
+| `MODEL_PATH` | `models/priority_stage5_svm_pipeline.joblib` | ML priority pipeline |
+| `CHROMA_DIR` or `CHROMA_DB_DIR` | `data/chroma` | Persisted Chroma vector store |
+| `KB_PATH` | `data/processed/rag_knowledge_base.jsonl` | RAG knowledge base (JSONL) |
 
-Optional: copy `backend/.env.example` to `backend/.env` and set values. For LLM generation, set **`OPENAI_API_KEY`**.
+**Local uvicorn:** copy `backend/.env.example` to `backend/.env` and adjust values.
+
+**Docker Compose:** copy **root** `.env.example` to `.env` at the repository root (same folder as `docker-compose.yml`), set `OPENAI_API_KEY` when you want LLM output, optionally set `NEXT_PUBLIC_API_BASE_URL` if the API is not on `http://localhost:8000`, then run compose (see below).
 
 ### Install and run
 
@@ -123,7 +140,38 @@ uvicorn app.main:app --reload
 
 ```powershell
 $env:OPENAI_API_KEY = "your-key-here"
+# optional:
+$env:OPENAI_MODEL = "gpt-4o-mini"
 ```
+
+### Run with Docker Compose (full stack)
+
+From the **repository root**:
+
+1. Create `.env` from the template and set variables as needed:
+
+   ```powershell
+   copy .env.example .env
+   ```
+
+   Edit `.env`:
+
+   - **`OPENAI_API_KEY`** — set when you want full LLM-generated triage (leave empty for ML+RAG-only fallback on `/predict`).
+   - **`OPENAI_MODEL`** — optional; defaults to `gpt-4o-mini` in Compose if unset.
+   - **`NEXT_PUBLIC_API_BASE_URL`** — optional; defaults to `http://localhost:8000`. The browser uses this URL to call the API (appropriate when the stack is published on `localhost` with port mapping).
+
+2. Build and start **backend** and **frontend**:
+
+   ```powershell
+   docker compose up --build
+   ```
+
+3. Open the apps:
+
+   - **Frontend:** [http://localhost:3000](http://localhost:3000) — dashboard at [http://localhost:3000/dashboard](http://localhost:3000/dashboard).
+   - **Backend:** [http://localhost:8000/docs](http://localhost:8000/docs), [http://localhost:8000/health](http://localhost:8000/health).
+
+Compose reads the root `.env` for variable substitution. The backend service sets `APP_HOME`, `MODEL_PATH`, `CHROMA_DIR`, `KB_PATH`, `ALLOWED_ORIGINS=http://localhost:3000`, and OpenAI-related variables. The frontend image is built with `NEXT_PUBLIC_API_BASE_URL` so client-side requests target the API. The `backend/data/chroma` folder is mounted at `/app/data/chroma` for persistence. Both services use `restart: unless-stopped`.
 
 ### Tests
 
@@ -146,11 +194,11 @@ copy .env.example .env.local
 npm run dev
 ```
 
-In `frontend/.env.local`:
+In `frontend/.env.local` (or root `.env` when using Compose for the frontend build):
 
-- **`NEXT_PUBLIC_API_URL`** — Base URL of the FastAPI app (e.g. `http://localhost:8000`). If unset, the UI defaults to `http://localhost:8000`.
+- **`NEXT_PUBLIC_API_BASE_URL`** — Base URL of the FastAPI app (e.g. `http://localhost:8000`). If unset, the UI defaults to `http://localhost:8000`. All API calls go through `getApiBaseUrl()` in `frontend/lib/config.ts` (no hardcoded backend URLs in components).
 
-The dashboard calls **`POST /predict`** or **`POST /predict/debug`** (when debug mode is on). Start the **backend** first; set **`OPENAI_API_KEY`** on the backend for successful analysis responses.
+The dashboard calls **`POST /predict`** or **`POST /predict/debug`** (when debug mode is on). Start the **backend** first. Set **`OPENAI_API_KEY`** (and optionally **`OPENAI_MODEL`**) for full LLM-written analysis; without a key, the API still returns ML priority, evidence, and fallback text for LLM-shaped fields.
 
 - App: `http://localhost:3000`
 - Dashboard: `http://localhost:3000/dashboard`
@@ -176,5 +224,5 @@ The dashboard calls **`POST /predict`** or **`POST /predict/debug`** (when debug
 ## Troubleshooting
 
 - **Imports fail when running uvicorn** — Run commands with **`backend/`** as the current working directory.
-- **Frontend cannot reach API** — Confirm `NEXT_PUBLIC_API_URL` and that the backend is listening. If you restrict CORS in `backend/app/main.py`, allow the frontend origin (e.g. `http://localhost:3000`).
+- **Frontend cannot reach API** — Confirm `NEXT_PUBLIC_API_BASE_URL` (build-time for Docker images) and that the backend is listening. Docker Compose sets `ALLOWED_ORIGINS=http://localhost:3000` on the backend for the default layout.
 - **Large Chroma files** — Vector DB under `backend/data/chroma/` may use **Git LFS** (see `.gitattributes`). Install [Git LFS](https://git-lfs.com/) and run `git lfs install` before clone/pull.

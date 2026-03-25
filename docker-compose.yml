@@ -1,0 +1,37 @@
+# Ops Decision Engine — full stack (FastAPI + Next.js)
+#
+# Copy `.env.example` to `.env` in the repo root. Compose substitutes ${VAR}
+# from that file for build args and injected environment.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      APP_HOME: /app
+      MODEL_PATH: /app/models/priority_stage5_svm_pipeline.joblib
+      CHROMA_DIR: /app/data/chroma
+      KB_PATH: /app/data/processed/rag_knowledge_base.jsonl
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ALLOWED_ORIGINS: http://localhost:3000
+    volumes:
+      - ./backend/data/chroma:/app/data/chroma
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+    restart: unless-stopped

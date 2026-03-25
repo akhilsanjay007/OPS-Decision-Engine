@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import re
 from collections import Counter
 from difflib import SequenceMatcher
@@ -9,12 +8,11 @@ from typing import Dict, Any, List
 
 from openai import OpenAI
 
+from src.core.config import get_openai_api_key, get_openai_model, is_openai_configured
 from src.pipeline.predict_and_retrieve import run_pipeline
 
 
 # ---------------- CONFIG ---------------- #
-
-OPENAI_MODEL = "gpt-4o-mini"
 
 # Reranking weights
 QUEUE_BOOST = 0.15
@@ -22,9 +20,18 @@ TYPE_BOOST = 0.05
 PRIORITY_BOOST = 0.03
 
 
-# ---------------- INIT LLM ---------------- #
+# ---------------- INIT LLM (lazy) ---------------- #
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_client: OpenAI | None = None
+
+
+def _get_openai_client() -> OpenAI | None:
+    global _client
+    if not is_openai_configured():
+        return None
+    if _client is None:
+        _client = OpenAI(api_key=get_openai_api_key())
+    return _client
 
 
 # ---------------- HELPERS ---------------- #
@@ -340,8 +347,15 @@ Escalation Recommendation:
 # ---------------- GENERATE RESPONSE ---------------- #
 
 def generate_decision(prompt: str) -> str:
+    client = _get_openai_client()
+    if client is None:
+        return (
+            "OPENAI_API_KEY is not set; LLM output unavailable. "
+            "Set OPENAI_API_KEY (and optionally OPENAI_MODEL) for full generated text."
+        )
+
     response = client.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=get_openai_model(),
         messages=[
             {
                 "role": "system",

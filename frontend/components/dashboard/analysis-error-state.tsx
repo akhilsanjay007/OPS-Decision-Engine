@@ -11,7 +11,7 @@ export default function AnalysisErrorState({ message }: AnalysisErrorStateProps)
         <p className="text-base font-semibold text-amber-200 sm:text-lg">Analysis could not be completed</p>
         <p className="text-sm leading-relaxed text-zinc-400">{message}</p>
         <p className="text-xs text-zinc-500">
-          Confirm the FastAPI backend is running and that <code className="text-zinc-400">NEXT_PUBLIC_API_URL</code>{" "}
+          Confirm the FastAPI backend is running and that <code className="text-zinc-400">NEXT_PUBLIC_API_BASE_URL</code>{" "}
           matches its base URL. You can select the ticket again to retry.
         </p>
       </CardContent>

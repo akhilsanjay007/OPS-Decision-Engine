@@ -174,10 +174,6 @@ function assertDebugPayload(body: unknown, debugMode: boolean): PredictDebugResp
 
 export async function analyzeTicket(ticket: Ticket, debugMode: boolean): Promise<AnalysisResult> {
   const baseUrl = getApiBaseUrl();
-  if (!baseUrl) {
-    throw new ApiError("API base URL is missing. Set NEXT_PUBLIC_API_URL in frontend/.env.local.");
-  }
-
   const path = debugMode ? "/predict/debug" : "/predict";
   const url = `${baseUrl}${path}`;
   const payload = buildPredictRequestBody(ticket);

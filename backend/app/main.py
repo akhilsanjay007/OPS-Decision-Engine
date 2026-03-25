@@ -1,28 +1,47 @@
+import os
+import traceback
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import traceback
-
 from app.schemas import PredictRequest, PredictResponse, PredictDebugResponse
 from app.service import service
+
+def _parse_allowed_origins() -> list[str]:
+    """
+    Parse ALLOWED_ORIGINS.
+
+    - `*` enables all origins
+    - comma-separated list enables only those origins
+    """
+    raw = os.getenv("ALLOWED_ORIGINS", "*").strip()
+    if raw == "*" or raw == "":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Load model, embedding model, and initialize Chroma before serving requests.
+    service.startup()
+    yield
+
 
 app = FastAPI(
     title="Ops Decision Engine API",
     version="1.0.0",
     description="Hybrid ML + RAG + LLM incident triage backend",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_parse_allowed_origins(),
+    # Browsers disallow `Access-Control-Allow-Credentials: true` with `*` origins.
+    allow_credentials=False if os.getenv("ALLOWED_ORIGINS", "*").strip() == "*" else True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def on_startup():
-    service.startup()
 
 
 @app.get("/")
