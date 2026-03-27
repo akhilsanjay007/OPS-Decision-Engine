@@ -5,9 +5,6 @@ import textwrap
 from pathlib import Path
 from typing import Any, List, Dict
 
-import chromadb
-from sentence_transformers import SentenceTransformer
-
 from src.runtime_paths import get_chroma_db_dir
 
 
@@ -20,8 +17,11 @@ DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # ---------------- HELPERS ---------------- #
 
-def load_embedder(model_name: str) -> SentenceTransformer:
+def load_embedder(model_name: str):
     print(f"[INFO] Loading embedding model: {model_name}")
+    # Lazy import avoids heavy ML initialization during app module import.
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(model_name)
 
 
@@ -32,6 +32,8 @@ def load_collection(chroma_path: str, collection_name: str):
         raise FileNotFoundError(f"Chroma DB not found: {db_path.resolve()}")
 
     print(f"[INFO] Loading Chroma DB from: {db_path.resolve()}")
+    import chromadb
+
     client = chromadb.PersistentClient(path=str(db_path))
 
     collections = [c.name for c in client.list_collections()]
