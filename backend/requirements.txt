@@ -1,6 +1,4 @@
 pandas
-jupyterlab
-ipykernel
 joblib
 scikit-learn
 chromadb
