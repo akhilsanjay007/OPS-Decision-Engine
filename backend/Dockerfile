@@ -8,15 +8,15 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=${APP_HOME}
 
 # Install Python dependencies first for better layer caching.
-COPY requirements.txt ${APP_HOME}/requirements.txt
+COPY backend/requirements.txt ${APP_HOME}/requirements.txt
 RUN pip install --no-cache-dir -r ${APP_HOME}/requirements.txt
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
 # Copy application and runtime assets.
-COPY src/ ${APP_HOME}/src/
-COPY app/ ${APP_HOME}/app/
-COPY models/ ${APP_HOME}/models/
-COPY data/ ${APP_HOME}/data/
+COPY backend/src/ ${APP_HOME}/src/
+COPY backend/app/ ${APP_HOME}/app/
+COPY backend/models/ ${APP_HOME}/models/
+COPY backend/data/ ${APP_HOME}/data/
 
 EXPOSE 8000
 
