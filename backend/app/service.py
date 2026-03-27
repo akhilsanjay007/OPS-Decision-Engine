@@ -102,8 +102,14 @@ class OpsDecisionService:
 
             self.chroma_collection = load_collection(str(CHROMA_DIR), COLLECTION_NAME)
             self.chroma_loaded = True
+            self.embedding_model = load_embedder(EMBED_MODEL)
+            self.embedding_model_loaded = True
             print("[INFO] Background Chroma rebuild succeeded; retrieval enabled.")
         except Exception as rebuild_exc:
+            self.embedding_model = None
+            self.embedding_model_loaded = False
+            self.chroma_collection = None
+            self.chroma_loaded = False
             print(
                 "[WARN] Background Chroma rebuild failed; staying in fallback mode: "
                 f"{type(rebuild_exc).__name__}: {rebuild_exc}"
@@ -127,13 +133,13 @@ class OpsDecisionService:
             print("[INFO] init ml loaded")
 
             try:
-                self.embedding_model = load_embedder(EMBED_MODEL)
-                self.embedding_model_loaded = True
-                print("[INFO] init embedding loaded")
-
                 self.chroma_collection = load_collection(str(CHROMA_DIR), COLLECTION_NAME)
                 self.chroma_loaded = True
                 print("[INFO] init chroma loaded")
+
+                self.embedding_model = load_embedder(EMBED_MODEL)
+                self.embedding_model_loaded = True
+                print("[INFO] init embedding loaded")
             except Exception as chroma_exc:
                 self.embedding_model = None
                 self.embedding_model_loaded = False
