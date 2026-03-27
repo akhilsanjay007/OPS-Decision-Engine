@@ -536,6 +536,7 @@ def run_full_pipeline_structured(
     queue: str,
     top_k: int = 3,
     include_debug: bool = False,
+    retrieval_enabled: bool = True,
     resources: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     request_start = time.perf_counter()
@@ -551,6 +552,7 @@ def run_full_pipeline_structured(
         ticket_type=ticket_type,
         queue=queue,
         top_k=retrieval_top_k,
+        retrieval_enabled=retrieval_enabled,
         model=resources.get("model") if resources else None,
         embedder=resources.get("embedder") if resources else None,
         collection=resources.get("collection") if resources else None,
@@ -733,6 +735,7 @@ def run_full_pipeline_structured_debug(
     ticket_type: str,
     queue: str,
     top_k: int = 3,
+    retrieval_enabled: bool = True,
     resources: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     return run_full_pipeline_structured(
@@ -741,5 +744,6 @@ def run_full_pipeline_structured_debug(
         queue=queue,
         top_k=top_k,
         include_debug=True,
+        retrieval_enabled=retrieval_enabled,
         resources=resources,
     )

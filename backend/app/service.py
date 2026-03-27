@@ -57,13 +57,24 @@ class OpsDecisionService:
             self.ml_model_loaded = True
             print("[INFO] init ml loaded")
 
-            self.embedding_model = load_embedder(EMBED_MODEL)
-            self.embedding_model_loaded = True
-            print("[INFO] init embedding loaded")
+            try:
+                self.embedding_model = load_embedder(EMBED_MODEL)
+                self.embedding_model_loaded = True
+                print("[INFO] init embedding loaded")
 
-            self.chroma_collection = load_collection(str(CHROMA_DIR), COLLECTION_NAME)
-            self.chroma_loaded = True
-            print("[INFO] init chroma loaded")
+                self.chroma_collection = load_collection(str(CHROMA_DIR), COLLECTION_NAME)
+                self.chroma_loaded = True
+                print("[INFO] init chroma loaded")
+            except Exception as chroma_exc:
+                self.embedding_model = None
+                self.embedding_model_loaded = False
+                self.chroma_collection = None
+                self.chroma_loaded = False
+                print(
+                    "[WARN] chroma skipped due to memory or initialization failure: "
+                    f"{type(chroma_exc).__name__}: {chroma_exc}"
+                )
+                print("[WARN] fallback mode activated: ML + LLM without retrieval evidence.")
 
             self.kb_loaded = KB_PATH.exists()
             if self.kb_loaded:
@@ -123,8 +134,6 @@ class OpsDecisionService:
     def predict(self, issue: str, ticket_type: str, queue: str) -> Dict[str, Any]:
         if (
             self.ml_model is None
-            or self.embedding_model is None
-            or self.chroma_collection is None
             or not self.init_completed
         ):
             raise ResourcesNotReadyError(
@@ -132,11 +141,21 @@ class OpsDecisionService:
                 "Retry in a few seconds and check /health for readiness flags."
             )
 
+        retrieval_enabled = (
+            self.embedding_model_loaded
+            and self.chroma_loaded
+            and self.embedding_model is not None
+            and self.chroma_collection is not None
+        )
+        if not retrieval_enabled:
+            print("[WARN] fallback mode activated: retrieval disabled (chroma not loaded).")
+
         return run_full_pipeline_structured(
             issue_description=issue,
             ticket_type=ticket_type,
             queue=queue,
             top_k=3,
+            retrieval_enabled=retrieval_enabled,
             resources={
                 "model": self.ml_model,
                 "embedder": self.embedding_model,
@@ -147,8 +166,6 @@ class OpsDecisionService:
     def predict_debug(self, issue: str, ticket_type: str, queue: str) -> Dict[str, Any]:
         if (
             self.ml_model is None
-            or self.embedding_model is None
-            or self.chroma_collection is None
             or not self.init_completed
         ):
             raise ResourcesNotReadyError(
@@ -156,11 +173,21 @@ class OpsDecisionService:
                 "Retry in a few seconds and check /health for readiness flags."
             )
 
+        retrieval_enabled = (
+            self.embedding_model_loaded
+            and self.chroma_loaded
+            and self.embedding_model is not None
+            and self.chroma_collection is not None
+        )
+        if not retrieval_enabled:
+            print("[WARN] fallback mode activated: retrieval disabled (chroma not loaded).")
+
         return run_full_pipeline_structured_debug(
             issue_description=issue,
             ticket_type=ticket_type,
             queue=queue,
             top_k=3,
+            retrieval_enabled=retrieval_enabled,
             resources={
                 "model": self.ml_model,
                 "embedder": self.embedding_model,

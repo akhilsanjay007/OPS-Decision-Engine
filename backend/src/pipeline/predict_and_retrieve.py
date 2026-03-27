@@ -149,6 +149,7 @@ def run_pipeline(
     ticket_type: str,
     queue: str,
     top_k: int = 3,
+    retrieval_enabled: bool = True,
     model=None,
     embedder=None,
     collection=None,
@@ -158,9 +159,13 @@ def run_pipeline(
     print("OPS DECISION ENGINE - PREDICT + RETRIEVE")
     print("=" * 120)
 
-    # 1) Use preloaded resources when provided; otherwise fallback to cache
-    if model is None or embedder is None or collection is None:
-        model, embedder, collection = get_cached_resources()
+    # 1) Require preloaded ML model (provided by app resource manager)
+    if model is None:
+        raise RuntimeError("ML model is not loaded.")
+
+    if retrieval_enabled and (embedder is None or collection is None):
+        print("[WARN] Retrieval disabled because embedder/chroma collection is unavailable.")
+        retrieval_enabled = False
 
     # 2) Predict priority
     ml_start = time.perf_counter()
@@ -174,24 +179,30 @@ def run_pipeline(
 
     print(f"\n[RESULT] Predicted Priority: {predicted_priority}")
 
-    # 3) Build enriched retrieval query
-    query = build_query(issue_description, ticket_type, queue)
-    print(f"[INFO] Retrieval Query:\n{query}\n")
+    query = ""
+    retrieved: List[Dict[str, Any]] = []
+    retrieval_elapsed_ms = 0.0
+    if retrieval_enabled:
+        # 3) Build enriched retrieval query
+        query = build_query(issue_description, ticket_type, queue)
+        print(f"[INFO] Retrieval Query:\n{query}\n")
 
-    # 4) Retrieve incidents
-    retrieval_start = time.perf_counter()
-    retrieved = retrieve_similar_incidents(
-        query=query,
-        chroma_path=str(get_chroma_db_dir()),
-        collection_name=COLLECTION_NAME,
-        model_name=EMBED_MODEL,
-        top_k=top_k,
-        queue_filter=None,
-        type_filter=None,
-        embedder=embedder,
-        collection=collection,
-    )
-    retrieval_elapsed_ms = (time.perf_counter() - retrieval_start) * 1000
+        # 4) Retrieve incidents
+        retrieval_start = time.perf_counter()
+        retrieved = retrieve_similar_incidents(
+            query=query,
+            chroma_path=str(get_chroma_db_dir()),
+            collection_name=COLLECTION_NAME,
+            model_name=EMBED_MODEL,
+            top_k=top_k,
+            queue_filter=None,
+            type_filter=None,
+            embedder=embedder,
+            collection=collection,
+        )
+        retrieval_elapsed_ms = (time.perf_counter() - retrieval_start) * 1000
+    else:
+        print("[WARN] Chroma retrieval skipped; running in fallback mode (ML + LLM).")
 
     return {
         "issue_description": issue_description,
