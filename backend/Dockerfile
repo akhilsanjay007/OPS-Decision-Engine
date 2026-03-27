@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir --upgrade-strategy only-if-needed -r ${APP_HOME}/
 # Copy application and runtime assets.
 COPY backend/src/ ${APP_HOME}/src/
 COPY backend/app/ ${APP_HOME}/app/
+COPY backend/scripts/ ${APP_HOME}/scripts/
 COPY backend/models/ ${APP_HOME}/models/
 COPY backend/data/processed/ ${APP_HOME}/data/processed/
 RUN mkdir -p ${APP_HOME}/data/chroma

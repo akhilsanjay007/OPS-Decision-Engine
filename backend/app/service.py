@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import traceback
 from threading import Lock, Thread
 from typing import Any, Dict
@@ -41,6 +44,72 @@ class OpsDecisionService:
         self.ml_model: Any | None = None
         self.embedding_model: Any | None = None
         self.chroma_collection: Any | None = None
+        self.chroma_rebuild_in_progress = False
+        self.chroma_rebuild_attempted = False
+
+    def _bool_env(self, name: str, default: bool) -> bool:
+        raw = os.getenv(name)
+        if raw is None:
+            return default
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+    def _attempt_chroma_rebuild_and_reload(self) -> None:
+        if self.chroma_rebuild_in_progress or self.chroma_rebuild_attempted:
+            return
+        if not KB_PATH.exists():
+            print("[WARN] Skipping Chroma rebuild: KB_PATH does not exist.")
+            return
+
+        self.chroma_rebuild_in_progress = True
+        self.chroma_rebuild_attempted = True
+        try:
+            build_batch_size = os.getenv("CHROMA_BUILD_BATCH_SIZE", "500")
+            embed_batch_size = os.getenv("CHROMA_EMBED_BATCH_SIZE", "32")
+            scripts_dir = os.getenv("APP_HOME", "/app")
+            rebuild_script = f"{scripts_dir}/scripts/rebuild_chroma.py"
+            verify_script = f"{scripts_dir}/scripts/verify_chroma.py"
+
+            print(
+                "[INFO] Starting background Chroma rebuild attempt "
+                f"(batch={build_batch_size}, embed_batch={embed_batch_size})"
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    rebuild_script,
+                    "--kb-path",
+                    str(KB_PATH),
+                    "--chroma-dir",
+                    str(CHROMA_DIR),
+                    "--batch-size",
+                    str(build_batch_size),
+                    "--embed-batch-size",
+                    str(embed_batch_size),
+                ],
+                check=True,
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    verify_script,
+                    "--chroma-dir",
+                    str(CHROMA_DIR),
+                    "--collection",
+                    COLLECTION_NAME,
+                ],
+                check=True,
+            )
+
+            self.chroma_collection = load_collection(str(CHROMA_DIR), COLLECTION_NAME)
+            self.chroma_loaded = True
+            print("[INFO] Background Chroma rebuild succeeded; retrieval enabled.")
+        except Exception as rebuild_exc:
+            print(
+                "[WARN] Background Chroma rebuild failed; staying in fallback mode: "
+                f"{type(rebuild_exc).__name__}: {rebuild_exc}"
+            )
+        finally:
+            self.chroma_rebuild_in_progress = False
 
     def _initialize_resources_once(self) -> None:
         try:
@@ -75,6 +144,15 @@ class OpsDecisionService:
                     f"{type(chroma_exc).__name__}: {chroma_exc}"
                 )
                 print("[WARN] fallback mode activated: ML + LLM without retrieval evidence.")
+                if self._bool_env("CHROMA_AUTO_REBUILD_IF_MISSING", True):
+                    print("[INFO] Scheduling one-time background Chroma rebuild attempt.")
+                    Thread(
+                        target=self._attempt_chroma_rebuild_and_reload,
+                        name="ops-chroma-rebuild",
+                        daemon=True,
+                    ).start()
+                else:
+                    print("[INFO] CHROMA_AUTO_REBUILD_IF_MISSING disabled; skipping rebuild.")
 
             self.kb_loaded = KB_PATH.exists()
             if self.kb_loaded:
@@ -123,6 +201,8 @@ class OpsDecisionService:
             "embedding_model_loaded": self.embedding_model_loaded,
             "chroma_loaded": self.chroma_loaded,
             "kb_loaded": self.kb_loaded,
+            "chroma_rebuild_in_progress": self.chroma_rebuild_in_progress,
+            "chroma_rebuild_attempted": self.chroma_rebuild_attempted,
             "init_started": self.init_started,
             "init_in_progress": self.init_in_progress,
             "init_completed": self.init_completed,
