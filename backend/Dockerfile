@@ -9,7 +9,8 @@ ENV PYTHONPATH=${APP_HOME}
 
 # Install Python dependencies first for better layer caching.
 COPY backend/requirements.txt ${APP_HOME}/requirements.txt
-RUN pip install --no-cache-dir -r ${APP_HOME}/requirements.txt
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch==2.3.1"
+RUN pip install --no-cache-dir --upgrade-strategy only-if-needed -r ${APP_HOME}/requirements.txt
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
 # Copy application and runtime assets.
