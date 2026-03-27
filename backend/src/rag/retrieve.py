@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import os
+import shutil
 import textwrap
 from pathlib import Path
 from typing import Any, List, Dict
@@ -31,6 +33,38 @@ def _safe_chromadb_version() -> str:
         return importlib.metadata.version("chromadb")
     except importlib.metadata.PackageNotFoundError:
         return "unknown"
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _prepare_runtime_chroma_dir(source_path: Path) -> Path:
+    """
+    Use an isolated runtime copy so routine retrieval does not mutate canonical persisted files.
+    """
+    use_runtime_copy = _bool_env("CHROMA_USE_RUNTIME_COPY", True)
+    if not use_runtime_copy:
+        print("[INFO] CHROMA_USE_RUNTIME_COPY disabled; using canonical Chroma directory directly.")
+        return source_path
+
+    runtime_raw = os.getenv("CHROMA_RUNTIME_DIR", str(source_path.parent / "chroma_runtime"))
+    runtime_path = Path(runtime_raw).expanduser().resolve()
+    refresh_copy = _bool_env("CHROMA_RUNTIME_COPY_REFRESH", True)
+
+    if runtime_path.exists() and refresh_copy:
+        shutil.rmtree(runtime_path)
+
+    if not runtime_path.exists():
+        shutil.copytree(source_path, runtime_path)
+        print(f"[INFO] Created isolated runtime Chroma copy at: {runtime_path}")
+    else:
+        print(f"[INFO] Reusing existing runtime Chroma copy at: {runtime_path}")
+
+    return runtime_path
 
 
 def log_chroma_diagnostics(chroma_path: str) -> None:
@@ -80,13 +114,17 @@ def verify_persisted_collection(chroma_path: str, collection_name: str) -> tuple
 
 
 def load_collection(chroma_path: str, collection_name: str):
-    db_path = Path(chroma_path)
-    log_chroma_diagnostics(chroma_path)
+    source_db_path = Path(chroma_path)
+    log_chroma_diagnostics(str(source_db_path))
 
-    if not db_path.exists():
-        raise FileNotFoundError(f"Chroma DB not found: {db_path.resolve()}")
+    if not source_db_path.exists():
+        raise FileNotFoundError(f"Chroma DB not found: {source_db_path.resolve()}")
 
-    ok, reason = verify_persisted_collection(chroma_path, collection_name)
+    db_path = _prepare_runtime_chroma_dir(source_db_path)
+    if db_path != source_db_path:
+        log_chroma_diagnostics(str(db_path))
+
+    ok, reason = verify_persisted_collection(str(db_path), collection_name)
     if not ok:
         raise RuntimeError(
             "Chroma persistence validation failed. "

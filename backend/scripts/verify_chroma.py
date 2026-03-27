@@ -7,7 +7,7 @@ from pathlib import Path
 import chromadb
 
 
-EXPECTED_CHROMADB_VERSION = "1.0.20"
+EXPECTED_CHROMADB_VERSION = "1.5.5"
 DEFAULT_COLLECTION = "incident_memory"
 
 

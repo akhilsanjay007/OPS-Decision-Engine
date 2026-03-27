@@ -10,7 +10,7 @@ import chromadb
 from sentence_transformers import SentenceTransformer
 
 
-EXPECTED_CHROMADB_VERSION = "1.0.20"
+EXPECTED_CHROMADB_VERSION = "1.5.5"
 DEFAULT_COLLECTION = "incident_memory"
 DEFAULT_EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 

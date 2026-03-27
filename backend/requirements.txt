@@ -1,7 +1,7 @@
 pandas
 joblib
 scikit-learn
-chromadb==1.0.20
+chromadb==1.5.5
 sentence-transformers==3.0.1
 transformers==4.44.2
 openai
