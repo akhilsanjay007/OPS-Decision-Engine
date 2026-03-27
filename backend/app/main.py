@@ -5,7 +5,7 @@ import traceback
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import PredictRequest, PredictResponse, PredictDebugResponse
-from app.service import ResourcesNotReadyError, service
+from app.service import OpsDecisionService, ResourcesNotReadyError
 
 def _parse_allowed_origins() -> list[str]:
     """
@@ -25,6 +25,7 @@ app = FastAPI(
     version="1.0.0",
     description="Hybrid ML + RAG + LLM incident triage backend",
 )
+app.state.resource_manager = OpsDecisionService()
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,7 +39,7 @@ app.add_middleware(
 @app.on_event("startup")
 def start_background_init() -> None:
     # Launch warmup asynchronously so the server can bind the port immediately.
-    service.start_background_initialization()
+    app.state.resource_manager.start_background_initialization()
 
 
 @app.get("/")
@@ -51,7 +52,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return service.health()
+    return app.state.resource_manager.health()
 
 
 @app.post("/predict", response_model=PredictResponse)
@@ -62,7 +63,7 @@ def predict(payload: PredictRequest):
         f"(type={payload.type!r}, queue={payload.queue!r}, issue_chars={len(payload.issue)})"
     )
     try:
-        result = service.predict(
+        result = app.state.resource_manager.predict(
             issue=payload.issue,
             ticket_type=payload.type,
             queue=payload.queue,
@@ -83,7 +84,7 @@ def predict(payload: PredictRequest):
 @app.post("/predict/debug", response_model=PredictDebugResponse)
 def predict_debug(payload: PredictRequest):
     try:
-        return service.predict_debug(
+        return app.state.resource_manager.predict_debug(
             issue=payload.issue,
             ticket_type=payload.type,
             queue=payload.queue,

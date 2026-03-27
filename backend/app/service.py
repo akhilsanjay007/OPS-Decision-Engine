@@ -30,14 +30,17 @@ class OpsDecisionService:
         self.ready = False
         self.init_error: str | None = None
         self._init_lock = Lock()
-        self._init_started = False
+        self.init_started = False
         self._init_thread: Thread | None = None
         self.init_in_progress = False
+        self.init_completed = False
         self.ml_model_loaded = False
         self.embedding_model_loaded = False
         self.chroma_loaded = False
         self.kb_loaded = False
-        self._resources: Dict[str, Any] | None = None
+        self.ml_model: Any | None = None
+        self.embedding_model: Any | None = None
+        self.chroma_collection: Any | None = None
 
     def _initialize_resources_once(self) -> None:
         try:
@@ -50,34 +53,31 @@ class OpsDecisionService:
             print(f"[INFO] CHROMA_DIR: {CHROMA_DIR}")
             print(f"[INFO] KB_PATH: {KB_PATH}")
 
-            model = load_ml_model()
+            self.ml_model = load_ml_model()
             self.ml_model_loaded = True
-            print("[INFO] Resource loaded: ml_model")
+            print("[INFO] init ml loaded")
 
-            embedder = load_embedder(EMBED_MODEL)
+            self.embedding_model = load_embedder(EMBED_MODEL)
             self.embedding_model_loaded = True
-            print("[INFO] Resource loaded: embedding_model")
+            print("[INFO] init embedding loaded")
 
-            collection = load_collection(str(CHROMA_DIR), COLLECTION_NAME)
+            self.chroma_collection = load_collection(str(CHROMA_DIR), COLLECTION_NAME)
             self.chroma_loaded = True
-            print("[INFO] Resource loaded: chroma_collection")
+            print("[INFO] init chroma loaded")
 
             self.kb_loaded = KB_PATH.exists()
             if self.kb_loaded:
-                print("[INFO] Resource loaded: kb_file")
+                print("[INFO] init kb loaded")
             else:
                 print("[WARN] KB file not found; continuing without kb preload.")
 
-            self._resources = {
-                "model": model,
-                "embedder": embedder,
-                "collection": collection,
-            }
             self.ready = True
+            self.init_completed = True
             self.init_error = None
-            print("[INFO] Background resource initialization completed.")
+            print("[INFO] init completed")
         except Exception as exc:
             self.ready = False
+            self.init_completed = False
             self.init_error = str(exc)
             print(f"[ERROR] Background initialization failed: {type(exc).__name__}: {exc}")
             print(traceback.format_exc())
@@ -86,12 +86,13 @@ class OpsDecisionService:
 
     def start_background_initialization(self) -> None:
         with self._init_lock:
-            if self._init_started:
+            if self.init_started:
                 print("[INFO] Background initialization already started; skipping duplicate launch.")
                 return
 
-            self._init_started = True
+            self.init_started = True
             self.init_in_progress = True
+            print("[INFO] init started")
             self._init_thread = Thread(
                 target=self._initialize_resources_once,
                 name="ops-resource-init",
@@ -111,14 +112,21 @@ class OpsDecisionService:
             "embedding_model_loaded": self.embedding_model_loaded,
             "chroma_loaded": self.chroma_loaded,
             "kb_loaded": self.kb_loaded,
+            "init_started": self.init_started,
             "init_in_progress": self.init_in_progress,
+            "init_completed": self.init_completed,
         }
         if self.init_error:
             payload["init_error"] = self.init_error
         return payload
 
     def predict(self, issue: str, ticket_type: str, queue: str) -> Dict[str, Any]:
-        if self._resources is None:
+        if (
+            self.ml_model is None
+            or self.embedding_model is None
+            or self.chroma_collection is None
+            or not self.init_completed
+        ):
             raise ResourcesNotReadyError(
                 "Service warming up: resources are still initializing. "
                 "Retry in a few seconds and check /health for readiness flags."
@@ -129,11 +137,20 @@ class OpsDecisionService:
             ticket_type=ticket_type,
             queue=queue,
             top_k=3,
-            resources=self._resources,
+            resources={
+                "model": self.ml_model,
+                "embedder": self.embedding_model,
+                "collection": self.chroma_collection,
+            },
         )
 
     def predict_debug(self, issue: str, ticket_type: str, queue: str) -> Dict[str, Any]:
-        if self._resources is None:
+        if (
+            self.ml_model is None
+            or self.embedding_model is None
+            or self.chroma_collection is None
+            or not self.init_completed
+        ):
             raise ResourcesNotReadyError(
                 "Service warming up: resources are still initializing. "
                 "Retry in a few seconds and check /health for readiness flags."
@@ -144,8 +161,9 @@ class OpsDecisionService:
             ticket_type=ticket_type,
             queue=queue,
             top_k=3,
-            resources=self._resources,
+            resources={
+                "model": self.ml_model,
+                "embedder": self.embedding_model,
+                "collection": self.chroma_collection,
+            },
         )
-
-
-service = OpsDecisionService()
