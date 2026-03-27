@@ -2,7 +2,8 @@ pandas
 joblib
 scikit-learn
 chromadb
-sentence-transformers
+sentence-transformers==3.0.1
+transformers==4.44.2
 openai
 fastapi
 uvicorn
