@@ -173,23 +173,47 @@ From the **repository root**:
 
 Compose reads the root `.env` for variable substitution. The backend service sets `APP_HOME`, `MODEL_PATH`, `CHROMA_DIR`, `KB_PATH`, `ALLOWED_ORIGINS=http://localhost:3000`, and OpenAI-related variables. The frontend image is built with `NEXT_PUBLIC_API_BASE_URL` so client-side requests target the API. The `backend/data/chroma` folder is mounted at `/app/data/chroma` for persistence. Both services use `restart: unless-stopped`.
 
-### Deploy backend on Render
+### Deploy backend on Railway
 
-The repo now includes `render.yaml` for a one-click backend deployment blueprint.
+The backend deploys directly from `backend/Dockerfile`.
 
 1. Push this repository to GitHub.
-2. In Render, create a new **Blueprint** service and point it at the repo.
-3. Render reads `render.yaml` and creates `ops-decision-engine-backend` from `backend/Dockerfile`.
-4. In the Render dashboard, set:
-   - `OPENAI_API_KEY` (required for full LLM-generated triage; optional for ML + RAG fallback mode)
-   - `ALLOWED_ORIGINS` (set this to your frontend URL instead of `*` in production)
-5. Deploy and verify:
+2. In Railway, create a new project and add a service from this repo.
+3. Configure Docker settings:
+   - **Dockerfile path:** `backend/Dockerfile`
+   - **Build context:** repository root
+4. Add a Railway volume and mount it at **`/data`**.
+5. Set environment variables:
+   - `OPENAI_API_KEY` (optional for startup; required for full LLM output)
+   - `OPENAI_MODEL=gpt-4o-mini` (or your preferred model)
+   - `ALLOWED_ORIGINS=<your-frontend-url>`
+   - `APP_HOME=/app`
+   - `MODEL_PATH=/app/models/priority_stage5_svm_pipeline.joblib`
+   - `KB_PATH=/app/data/processed/rag_knowledge_base.jsonl`
+   - `CHROMA_DIR=/data/chroma` (persistent volume path)
+6. Deploy and verify:
    - `GET /health` returns `status: "ok"` once startup completes.
-   - Use the Render service URL with `/docs` to test the API.
+   - Use the Railway service URL with `/docs` to test the API.
 
 Notes:
-- The container startup command now respects Render's dynamic `PORT` environment variable.
-- Chroma data is stored in `/app/data/chroma` inside the container. On Render, attach a persistent disk if you need index persistence across deploys/restarts.
+- The container startup command already respects `PORT`.
+- Long-term pattern: the container does **not** rebuild Chroma at startup.
+- Keep Chroma in the Railway volume (`/data/chroma`) and run rebuild/verify as a maintenance operation.
+- `KB_PATH` (`/app/data/processed/rag_knowledge_base.jsonl`) is bundled for offline/index maintenance workflows.
+
+### Chroma long-term operations
+
+Use these scripts outside critical startup paths (locally or in a maintenance job):
+
+```powershell
+python backend/scripts/rebuild_chroma.py --kb-path backend/data/processed/rag_knowledge_base.jsonl --chroma-dir backend/data/chroma
+python backend/scripts/verify_chroma.py --chroma-dir backend/data/chroma
+```
+
+Recommended pattern:
+- Build/rebuild Chroma in a controlled environment.
+- Verify before deployment.
+- Store the resulting DB on persistent volume/storage and point `CHROMA_DIR` there.
 
 ### Tests
 
@@ -243,4 +267,4 @@ The dashboard calls **`POST /predict`** or **`POST /predict/debug`** (when debug
 
 - **Imports fail when running uvicorn** — Run commands with **`backend/`** as the current working directory.
 - **Frontend cannot reach API** — Confirm `NEXT_PUBLIC_API_BASE_URL` (build-time for Docker images) and that the backend is listening. Docker Compose sets `ALLOWED_ORIGINS=http://localhost:3000` on the backend for the default layout.
-- **Large Chroma files** — Vector DB under `backend/data/chroma/` may use **Git LFS** (see `.gitattributes`). Install [Git LFS](https://git-lfs.com/) and run `git lfs install` before clone/pull.
+- **Chroma persistence issues in cloud deploys** — avoid relying on Git-tracked `backend/data/chroma` inside container images; use a persistent volume path via `CHROMA_DIR` and keep rebuilds out of startup.

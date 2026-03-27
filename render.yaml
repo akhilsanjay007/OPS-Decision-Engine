@@ -8,6 +8,10 @@ services:
     plan: free
     autoDeploy: true
     healthCheckPath: /health
+    disks:
+      - name: chroma-data
+        mountPath: /var/data
+        sizeGB: 1
     envVars:
       - key: OPENAI_API_KEY
         sync: false
@@ -20,6 +24,6 @@ services:
       - key: MODEL_PATH
         value: /app/models/priority_stage5_svm_pipeline.joblib
       - key: CHROMA_DIR
-        value: /app/data/chroma
+        value: /var/data/chroma
       - key: KB_PATH
         value: /app/data/processed/rag_knowledge_base.jsonl

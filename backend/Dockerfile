@@ -15,11 +15,11 @@ RUN pip install --no-cache-dir --upgrade-strategy only-if-needed -r ${APP_HOME}/
 # Copy application and runtime assets.
 COPY backend/src/ ${APP_HOME}/src/
 COPY backend/app/ ${APP_HOME}/app/
-COPY backend/scripts/ ${APP_HOME}/scripts/
 COPY backend/models/ ${APP_HOME}/models/
-COPY backend/data/ ${APP_HOME}/data/
+COPY backend/data/processed/ ${APP_HOME}/data/processed/
+RUN mkdir -p ${APP_HOME}/data/chroma
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python ${APP_HOME}/scripts/rebuild_chroma.py --kb-path ${KB_PATH:-/app/data/processed/rag_knowledge_base.jsonl} --chroma-dir ${CHROMA_DIR:-/app/data/chroma} && python ${APP_HOME}/scripts/verify_chroma.py --chroma-dir ${CHROMA_DIR:-/app/data/chroma} && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
 

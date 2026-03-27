@@ -48,6 +48,7 @@ def rebuild(
     collection_name: str,
     embedding_model: str,
     batch_size: int,
+    embed_batch_size: int,
 ) -> None:
     _assert_chromadb_version(EXPECTED_CHROMADB_VERSION)
 
@@ -71,36 +72,46 @@ def rebuild(
     collection = client.create_collection(name=collection_name)
     print(f"[INFO] Created collection: {collection_name}")
 
-    ids = [str(r["doc_id"]) for r in records]
-    docs = [r["retrieval_text"] for r in records]
-    metas = []
-    for r in records:
-        metas.append(
-            {
-                "source": r.get("source", ""),
-                "issue_description": r.get("issue_description", ""),
-                "resolution": r.get("resolution", ""),
-                "type": r.get("type", ""),
-                "queue": r.get("queue", ""),
-                "priority": r.get("priority", ""),
-                "tags": ", ".join(r.get("tags", []))
-                if isinstance(r.get("tags", []), list)
-                else str(r.get("tags", "")),
-            }
-        )
-
-    print("[INFO] Encoding documents...")
-    embeddings = model.encode(docs, show_progress_bar=True).tolist()
-
-    print(f"[INFO] Writing {len(ids)} vectors in batches of {batch_size}")
+    total_docs = len(records)
+    print(
+        f"[INFO] Streaming build with add_batch_size={batch_size}, "
+        f"embed_batch_size={embed_batch_size}, total_docs={total_docs}"
+    )
+    print("[INFO] Encoding and writing in chunks to reduce memory usage...")
     offset = 0
-    for batch_ids in _chunk(ids, batch_size):
-        end = offset + len(batch_ids)
+    while offset < total_docs:
+        end = min(offset + batch_size, total_docs)
+        chunk = records[offset:end]
+
+        ids = [str(r["doc_id"]) for r in chunk]
+        docs = [r["retrieval_text"] for r in chunk]
+        metas = []
+        for r in chunk:
+            metas.append(
+                {
+                    "source": r.get("source", ""),
+                    "issue_description": r.get("issue_description", ""),
+                    "resolution": r.get("resolution", ""),
+                    "type": r.get("type", ""),
+                    "queue": r.get("queue", ""),
+                    "priority": r.get("priority", ""),
+                    "tags": ", ".join(r.get("tags", []))
+                    if isinstance(r.get("tags", []), list)
+                    else str(r.get("tags", "")),
+                }
+            )
+
+        embeddings = model.encode(
+            docs,
+            batch_size=embed_batch_size,
+            show_progress_bar=False,
+        ).tolist()
+
         collection.add(
-            ids=ids[offset:end],
-            documents=docs[offset:end],
-            embeddings=embeddings[offset:end],
-            metadatas=metas[offset:end],
+            ids=ids,
+            documents=docs,
+            embeddings=embeddings,
+            metadatas=metas,
         )
         print(f"[INFO] Added batch {offset}..{end - 1}")
         offset = end
@@ -123,7 +134,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--collection", type=str, default=DEFAULT_COLLECTION)
     parser.add_argument("--embed-model", type=str, default=DEFAULT_EMBED_MODEL)
-    parser.add_argument("--batch-size", type=int, default=5000)
+    parser.add_argument("--batch-size", type=int, default=500)
+    parser.add_argument("--embed-batch-size", type=int, default=32)
     return parser.parse_args()
 
 
@@ -135,4 +147,5 @@ if __name__ == "__main__":
         collection_name=args.collection,
         embedding_model=args.embed_model,
         batch_size=args.batch_size,
+        embed_batch_size=args.embed_batch_size,
     )
