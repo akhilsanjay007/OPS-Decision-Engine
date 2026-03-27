@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import joblib
 import re
+import time
 from threading import Lock
 from typing import Dict, Any, List
 
@@ -162,12 +163,14 @@ def run_pipeline(
         model, embedder, collection = get_cached_resources()
 
     # 2) Predict priority
+    ml_start = time.perf_counter()
     predicted_priority = predict_priority(
         model,
         issue_description,
         ticket_type,
         queue,
     )
+    ml_elapsed_ms = (time.perf_counter() - ml_start) * 1000
 
     print(f"\n[RESULT] Predicted Priority: {predicted_priority}")
 
@@ -176,6 +179,7 @@ def run_pipeline(
     print(f"[INFO] Retrieval Query:\n{query}\n")
 
     # 4) Retrieve incidents
+    retrieval_start = time.perf_counter()
     retrieved = retrieve_similar_incidents(
         query=query,
         chroma_path=str(get_chroma_db_dir()),
@@ -187,6 +191,7 @@ def run_pipeline(
         embedder=embedder,
         collection=collection,
     )
+    retrieval_elapsed_ms = (time.perf_counter() - retrieval_start) * 1000
 
     return {
         "issue_description": issue_description,
@@ -195,6 +200,10 @@ def run_pipeline(
         "predicted_priority": predicted_priority,
         "retrieved_incidents": retrieved,
         "retrieval_query": query,
+        "timings_ms": {
+            "ml_prediction": round(ml_elapsed_ms, 2),
+            "retrieval_chroma": round(retrieval_elapsed_ms, 2),
+        },
     }
 
 

@@ -1,4 +1,5 @@
 import os
+import time
 import traceback
 
 from fastapi import FastAPI, HTTPException
@@ -50,16 +51,25 @@ def health():
 
 @app.post("/predict", response_model=PredictResponse)
 def predict(payload: PredictRequest):
+    request_start = time.perf_counter()
+    print(
+        "[INFO] /predict request started "
+        f"(type={payload.type!r}, queue={payload.queue!r}, issue_chars={len(payload.issue)})"
+    )
     try:
-        return service.predict(
+        result = service.predict(
             issue=payload.issue,
             ticket_type=payload.type,
             queue=payload.queue,
         )
+        return result
     except Exception as e:
-        print(f"[ERROR] /predict failed: {e}")
-        traceback.print_exc()
+        print(f"[ERROR] /predict failed: {type(e).__name__}: {e}")
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        total_ms = (time.perf_counter() - request_start) * 1000
+        print(f"[TIMING] endpoint=/predict total_request_ms={total_ms:.2f}")
 
 
 @app.post("/predict/debug", response_model=PredictDebugResponse)

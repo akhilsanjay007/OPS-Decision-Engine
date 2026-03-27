@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import re
+import time
+import traceback
 from collections import Counter
 from difflib import SequenceMatcher
 from typing import Dict, Any, List
 
 from openai import OpenAI
-from src.core.config import get_openai_api_key, get_openai_model, is_openai_configured
+from src.core.config import (
+    get_openai_api_key,
+    get_openai_model,
+    get_openai_timeout_seconds,
+    is_openai_configured,
+)
 from src.pipeline.predict_and_retrieve import run_pipeline
 
 QUEUE_BOOST = 0.15
@@ -386,9 +393,11 @@ def generate_decision(prompt: str) -> str:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.2,
+            timeout=get_openai_timeout_seconds(),
         )
     except Exception as exc:
-        print(f"[ERROR] OpenAI call failed: {exc}")
+        print(f"[ERROR] OpenAI call failed: {type(exc).__name__}: {exc}")
+        print(traceback.format_exc())
         raise
 
     return response.choices[0].message.content.strip()
@@ -529,9 +538,14 @@ def run_full_pipeline_structured(
     include_debug: bool = False,
     resources: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    print("[DEBUG] run_full_pipeline_structured started")
+    request_start = time.perf_counter()
+    print(
+        "[INFO] /predict pipeline started "
+        f"(type={ticket_type!r}, queue={queue!r}, issue_chars={len(issue_description)})"
+    )
     retrieval_top_k = max(top_k * 3, 8)
 
+    predict_retrieve_start = time.perf_counter()
     result = run_pipeline(
         issue_description=issue_description,
         ticket_type=ticket_type,
@@ -541,6 +555,17 @@ def run_full_pipeline_structured(
         embedder=resources.get("embedder") if resources else None,
         collection=resources.get("collection") if resources else None,
     )
+    predict_retrieve_elapsed_ms = (time.perf_counter() - predict_retrieve_start) * 1000
+    stage_timings = dict(result.get("timings_ms", {}))
+    stage_timings["predict_plus_retrieve"] = round(predict_retrieve_elapsed_ms, 2)
+    print(
+        "[TIMING] stage=ml_prediction_ms "
+        f"value={stage_timings.get('ml_prediction', 'n/a')}"
+    )
+    print(
+        "[TIMING] stage=retrieval_chroma_ms "
+        f"value={stage_timings.get('retrieval_chroma', 'n/a')}"
+    )
     print(
         f"[DEBUG] after retrieval: predicted_priority={result.get('predicted_priority')}, "
         f"retrieved_count={len(result.get('retrieved_incidents', []))}"
@@ -549,14 +574,19 @@ def run_full_pipeline_structured(
     raw_incidents = result["retrieved_incidents"]
     ml_predicted_priority = result["predicted_priority"]
 
+    rerank_start = time.perf_counter()
     reranked_incidents = rerank_incidents(
         raw_incidents,
         input_queue=queue,
         input_type=ticket_type,
         predicted_priority=ml_predicted_priority,
     )
+    rerank_elapsed_ms = (time.perf_counter() - rerank_start) * 1000
+    stage_timings["reranking"] = round(rerank_elapsed_ms, 2)
+    print(f"[TIMING] stage=reranking_ms value={stage_timings['reranking']}")
     print(f"[DEBUG] after reranking: reranked_count={len(reranked_incidents)}")
 
+    dedup_start = time.perf_counter()
     incidents = deduplicate_incidents(
         reranked_incidents,
         max_results=top_k,
@@ -564,6 +594,9 @@ def run_full_pipeline_structured(
         preferred_queue=queue,
         min_same_queue=2,
     )
+    dedup_elapsed_ms = (time.perf_counter() - dedup_start) * 1000
+    stage_timings["deduplication"] = round(dedup_elapsed_ms, 2)
+    print(f"[TIMING] stage=deduplication_ms value={stage_timings['deduplication']}")
     print(f"[DEBUG] after deduplication: deduped_count={len(incidents)}")
 
     recommended_priority = recommend_priority(
@@ -607,13 +640,21 @@ def run_full_pipeline_structured(
     )
     print(f"[DEBUG] after prompt build: prompt_chars={len(prompt)}")
 
+    openai_elapsed_ms = 0.0
     if is_openai_configured():
         try:
+            openai_start = time.perf_counter()
             decision_text = generate_decision(prompt)
+            openai_elapsed_ms = (time.perf_counter() - openai_start) * 1000
+            stage_timings["openai_call"] = round(openai_elapsed_ms, 2)
+            print(f"[TIMING] stage=openai_call_ms value={stage_timings['openai_call']}")
             print(
                 f"[DEBUG] after OpenAI response returns: response_chars={len(decision_text)}"
             )
         except Exception as exc:
+            openai_elapsed_ms = (time.perf_counter() - openai_start) * 1000
+            stage_timings["openai_call"] = round(openai_elapsed_ms, 2)
+            print(f"[TIMING] stage=openai_call_ms value={stage_timings['openai_call']}")
             print(f"[WARN] OpenAI generation failed; using fallback response: {exc}")
             reason = (
                 f"OpenAI request failed ({type(exc).__name__}). "
@@ -627,6 +668,7 @@ def run_full_pipeline_structured(
                 reason=reason,
             )
     else:
+        stage_timings["openai_call"] = 0.0
         print("[INFO] OPENAI_API_KEY not set; returning LLM fallback (ML + RAG still active).")
         reason = (
             "OPENAI_API_KEY is not set. ML predicted priority and RAG retrieval are still available; "
@@ -671,12 +713,17 @@ def run_full_pipeline_structured(
         "raw_decision": parsed["raw_decision"],
     }
 
+    total_elapsed_ms = (time.perf_counter() - request_start) * 1000
+    stage_timings["total_request"] = round(total_elapsed_ms, 2)
+    print(f"[TIMING] stage=total_request_ms value={stage_timings['total_request']}")
+
     if include_debug:
         response["raw_retrieved_incidents"] = [serialize_incident(inc) for inc in raw_incidents]
         response["reranked_incidents"] = [serialize_incident(inc) for inc in reranked_incidents]
         response["deduplicated_incidents"] = [serialize_incident(inc) for inc in incidents]
         response["evidence_summary"] = evidence_summary
         response["prompt"] = prompt
+        response["timings_ms"] = stage_timings
 
     return response
 

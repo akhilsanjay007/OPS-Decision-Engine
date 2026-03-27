@@ -59,6 +59,17 @@ def get_openai_model() -> str:
     return stripped if stripped else "gpt-4o-mini"
 
 
+def get_openai_timeout_seconds() -> float:
+    """Timeout for OpenAI chat completion requests in seconds."""
+    raw = (os.getenv("OPENAI_TIMEOUT_SECONDS", "20") or "").strip()
+    try:
+        timeout = float(raw)
+    except ValueError:
+        return 20.0
+    # Guardrail against invalid non-positive values
+    return timeout if timeout > 0 else 20.0
+
+
 def is_openai_configured() -> bool:
     return get_openai_api_key() is not None
 
