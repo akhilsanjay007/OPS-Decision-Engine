@@ -3,7 +3,7 @@ services:
     name: ops-decision-engine-backend
     runtime: docker
     dockerContext: ./backend
-    dockerfilePath: ./backend/Dockerfile
+    dockerfilePath: ./Dockerfile
     plan: free
     autoDeploy: true
     healthCheckPath: /health

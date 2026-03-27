@@ -1,6 +1,5 @@
 import os
 import traceback
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,18 +19,10 @@ def _parse_allowed_origins() -> list[str]:
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    # Load model, embedding model, and initialize Chroma before serving requests.
-    service.startup()
-    yield
-
-
 app = FastAPI(
     title="Ops Decision Engine API",
     version="1.0.0",
     description="Hybrid ML + RAG + LLM incident triage backend",
-    lifespan=lifespan,
 )
 
 app.add_middleware(
