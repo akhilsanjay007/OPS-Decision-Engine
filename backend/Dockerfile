@@ -10,6 +10,7 @@ ENV PYTHONPATH=${APP_HOME}
 # Install Python dependencies first for better layer caching.
 COPY requirements.txt ${APP_HOME}/requirements.txt
 RUN pip install --no-cache-dir -r ${APP_HOME}/requirements.txt
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
 
 # Copy application and runtime assets.
 COPY src/ ${APP_HOME}/src/

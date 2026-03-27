@@ -5,7 +5,7 @@ import traceback
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import PredictRequest, PredictResponse, PredictDebugResponse
-from app.service import service
+from app.service import ResourcesNotReadyError, service
 
 def _parse_allowed_origins() -> list[str]:
     """
@@ -35,6 +35,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+def start_background_init() -> None:
+    # Launch warmup asynchronously so the server can bind the port immediately.
+    service.start_background_initialization()
+
 
 @app.get("/")
 def root():
@@ -63,6 +68,9 @@ def predict(payload: PredictRequest):
             queue=payload.queue,
         )
         return result
+    except ResourcesNotReadyError as e:
+        print(f"[WARN] /predict requested before resources ready: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         print(f"[ERROR] /predict failed: {type(e).__name__}: {e}")
         print(traceback.format_exc())
@@ -80,6 +88,9 @@ def predict_debug(payload: PredictRequest):
             ticket_type=payload.type,
             queue=payload.queue,
         )
+    except ResourcesNotReadyError as e:
+        print(f"[WARN] /predict/debug requested before resources ready: {e}")
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         print(f"[ERROR] /predict/debug failed: {e}")
         traceback.print_exc()
