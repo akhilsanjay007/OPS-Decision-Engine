@@ -173,6 +173,24 @@ From the **repository root**:
 
 Compose reads the root `.env` for variable substitution. The backend service sets `APP_HOME`, `MODEL_PATH`, `CHROMA_DIR`, `KB_PATH`, `ALLOWED_ORIGINS=http://localhost:3000`, and OpenAI-related variables. The frontend image is built with `NEXT_PUBLIC_API_BASE_URL` so client-side requests target the API. The `backend/data/chroma` folder is mounted at `/app/data/chroma` for persistence. Both services use `restart: unless-stopped`.
 
+### Deploy backend on Render
+
+The repo now includes `render.yaml` for a one-click backend deployment blueprint.
+
+1. Push this repository to GitHub.
+2. In Render, create a new **Blueprint** service and point it at the repo.
+3. Render reads `render.yaml` and creates `ops-decision-engine-backend` from `backend/Dockerfile`.
+4. In the Render dashboard, set:
+   - `OPENAI_API_KEY` (required for full LLM-generated triage; optional for ML + RAG fallback mode)
+   - `ALLOWED_ORIGINS` (set this to your frontend URL instead of `*` in production)
+5. Deploy and verify:
+   - `GET /health` returns `status: "ok"` once startup completes.
+   - Use the Render service URL with `/docs` to test the API.
+
+Notes:
+- The container startup command now respects Render's dynamic `PORT` environment variable.
+- Chroma data is stored in `/app/data/chroma` inside the container. On Render, attach a persistent disk if you need index persistence across deploys/restarts.
+
 ### Tests
 
 ```powershell

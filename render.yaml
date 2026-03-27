@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: ops-decision-engine-backend
+    runtime: docker
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: APP_HOME
+        value: /app
+      - key: MODEL_PATH
+        value: /app/models/priority_stage5_svm_pipeline.joblib
+      - key: CHROMA_DIR
+        value: /app/data/chroma
+      - key: KB_PATH
+        value: /app/data/processed/rag_knowledge_base.jsonl
