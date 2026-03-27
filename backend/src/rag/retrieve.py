@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import textwrap
 from pathlib import Path
 from typing import Any, List, Dict
@@ -25,11 +26,72 @@ def load_embedder(model_name: str):
     return SentenceTransformer(model_name)
 
 
+def _safe_chromadb_version() -> str:
+    try:
+        return importlib.metadata.version("chromadb")
+    except importlib.metadata.PackageNotFoundError:
+        return "unknown"
+
+
+def log_chroma_diagnostics(chroma_path: str) -> None:
+    """
+    Emit startup diagnostics to help debug persisted Chroma compatibility issues.
+    """
+    db_path = Path(chroma_path)
+    sqlite_path = db_path / "chroma.sqlite3"
+    top_level_entries = sorted([p.name for p in db_path.iterdir()]) if db_path.exists() else []
+    segment_dirs = [p for p in db_path.iterdir() if p.is_dir()] if db_path.exists() else []
+    segment_index_files = any((d / "index_metadata.pickle").exists() for d in segment_dirs)
+
+    chroma_version = _safe_chromadb_version()
+    expected_layout = "chroma.sqlite3 + segment directory with index files"
+    print(f"[DIAG] chromadb_version={chroma_version}")
+    print(f"[DIAG] chroma_expected_layout={expected_layout}")
+    print(f"[DIAG] chroma_dir={db_path.resolve()}")
+    print(f"[DIAG] chroma_top_level_files={top_level_entries}")
+    print(f"[DIAG] chroma_expected_sqlite_exists={sqlite_path.exists()}")
+    print(f"[DIAG] chroma_expected_segment_index_exists={segment_index_files}")
+
+
+def verify_persisted_collection(chroma_path: str, collection_name: str) -> tuple[bool, str]:
+    """
+    Verify persisted Chroma directory can be opened and queried.
+    """
+    db_path = Path(chroma_path)
+    if not db_path.exists():
+        return False, f"Chroma DB directory not found: {db_path.resolve()}"
+
+    try:
+        import chromadb
+
+        client = chromadb.PersistentClient(path=str(db_path))
+        collections = [c.name for c in client.list_collections()]
+        if collection_name not in collections:
+            return False, (
+                f"Collection '{collection_name}' not found. Available collections: {collections}"
+            )
+
+        collection = client.get_collection(name=collection_name)
+        # lightweight runtime validity probe
+        collection.query(query_texts=["startup health probe"], n_results=1)
+        return True, "Persisted Chroma directory is readable and queryable."
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
 def load_collection(chroma_path: str, collection_name: str):
     db_path = Path(chroma_path)
+    log_chroma_diagnostics(chroma_path)
 
     if not db_path.exists():
         raise FileNotFoundError(f"Chroma DB not found: {db_path.resolve()}")
+
+    ok, reason = verify_persisted_collection(chroma_path, collection_name)
+    if not ok:
+        raise RuntimeError(
+            "Chroma persistence validation failed. "
+            f"Reason: {reason}. Rebuild the DB with backend/scripts/rebuild_chroma.py"
+        )
 
     print(f"[INFO] Loading Chroma DB from: {db_path.resolve()}")
     import chromadb
